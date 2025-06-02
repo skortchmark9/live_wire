@@ -101,7 +101,7 @@ async def main():
     # Date range - adjust as needed
     # Start from when you moved in (you can adjust this date)
     START_DATE = date(2024, 8, 1)  # Adjust to your move-in date
-    END_DATE = date.today()
+    END_DATE = date.today() + timedelta(days=1)  # Collect up to today
     
     print(f"Collecting electricity data from {START_DATE} to {END_DATE}")
     

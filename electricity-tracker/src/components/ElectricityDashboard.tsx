@@ -25,8 +25,8 @@ interface WeatherDataPoint {
 interface CombinedDataPoint {
   timestamp: string
   consumption_kwh: number
-  temperature_f: number
-  apparent_temperature_f: number
+  temperature_f?: number | null
+  apparent_temperature_f?: number | null
   cost: number
   hour: number
   dayOfWeek: number
@@ -103,17 +103,16 @@ export default function ElectricityDashboard() {
       const hourKey = elec.start_time.substring(0, 13)
       const weather = weatherMap.get(hourKey)
 
-      if (weather && weather.temperature_f !== null) {
-        combined.push({
-          timestamp: elec.start_time,
-          consumption_kwh: elec.consumption_kwh,
-          temperature_f: weather.temperature_f,
-          apparent_temperature_f: weather.apparent_temperature_f || weather.temperature_f,
-          cost: elec.provided_cost || 0,
-          hour: startTime.getHours(),
-          dayOfWeek: startTime.getDay()
-        })
-      }
+
+      combined.push({
+        timestamp: elec.start_time,
+        consumption_kwh: elec.consumption_kwh,
+        temperature_f: weather?.temperature_f,
+        apparent_temperature_f: weather?.apparent_temperature_f || weather?.temperature_f,
+        cost: elec.provided_cost || 0,
+        hour: startTime.getHours(),
+        dayOfWeek: startTime.getDay()
+      })
     })
 
     combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
@@ -156,7 +155,8 @@ export default function ElectricityDashboard() {
   const getAvgTemperature = () => {
     const filtered = getFilteredData()
     if (filtered.length === 0) return 0
-    return (filtered.reduce((sum, d) => sum + d.temperature_f, 0) / filtered.length).toFixed(1)
+    const withTemps = filtered.filter((d): d is CombinedDataPoint & { temperature_f: number } => d.temperature_f !== null && d.temperature_f !== undefined);
+    return (withTemps.reduce((sum, d) => sum + d.temperature_f, 0) / withTemps.length).toFixed(1);
   }
 
   if (loading) {
