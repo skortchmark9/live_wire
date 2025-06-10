@@ -49,10 +49,8 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-
 class ElectricityPredictor:
     def __init__(self):
-        # XGBoost regressor with modest hyperparameters
         self.model = XGBRegressor(
             n_estimators=800,
             max_depth=6,
@@ -67,345 +65,211 @@ class ElectricityPredictor:
         self.is_trained = False
 
     def load_data(self):
-        """Load and preprocess meter & weather JSONs into DataFrames."""
         elec_path = Path("electricity-tracker/public/data/electricity_usage.json")
         weather_path = Path("electricity-tracker/public/data/weather_data.json")
 
         if not elec_path.exists() or not weather_path.exists():
-            raise FileNotFoundError(
-                "Required data files not found. "
-                "Run data collection scripts first."
-            )
+            raise FileNotFoundError("Data files not found.")
 
         with open(elec_path) as f:
-            elec_json = json.load(f)
+            elec_data = json.load(f)
         with open(weather_path) as f:
-            weather_json = json.load(f)
+            weather_data = json.load(f)
 
-        elec_df = pd.DataFrame(elec_json["data"])
-        weather_df = pd.DataFrame(weather_json["data"])
+        elec_df = pd.DataFrame(elec_data["data"])
+        weather_df = pd.DataFrame(weather_data["data"])
 
-        # Parse timestamps, drop timezone suffix if present
-        elec_df["start_time"] = pd.to_datetime(
-            elec_df["start_time"].str.replace(r"[+-]\d{2}:\d{2}$", "", regex=True),
-            errors="coerce"
+        elec_df["start_time"] = (
+            pd.to_datetime(elec_df["start_time"], utc=True)
+            .dt.tz_convert("America/New_York")
+            .dt.tz_localize(None)
         )
-        elec_df["end_time"] = pd.to_datetime(
-            elec_df["end_time"].str.replace(r"[+-]\d{2}:\d{2}$", "", regex=True),
-            errors="coerce"
+        elec_df["end_time"] = (
+            pd.to_datetime(elec_df["end_time"], utc=True)
+            .dt.tz_convert("America/New_York")
+            .dt.tz_localize(None)
         )
-        weather_df["timestamp"] = pd.to_datetime(weather_df["timestamp"], errors="coerce")
 
-        # Drop any rows with invalid timestamps or missing consumption
+
+        weather_df["timestamp"] = pd.to_datetime(weather_df["timestamp"])
+
         elec_df = elec_df.dropna(subset=["start_time", "end_time", "consumption_kwh"])
         weather_df = weather_df.dropna(subset=["timestamp"])
 
-        # Create an “hour_timestamp” column for weather merging (floor to hour)
-        elec_df["hour_timestamp"] = elec_df["start_time"].dt.floor("H")
-        weather_df["hour_timestamp"] = weather_df["timestamp"].dt.floor("H")
+        elec_df = elec_df.set_index("start_time").sort_index()
+        weather_df = weather_df.set_index("timestamp").sort_index()
 
-        # Build hourly weather lookup
-        weather_hourly = (
-            weather_df
-            .set_index("hour_timestamp")
-            .sort_index()
-            .loc[:, [
-                "temperature_f",
-                "apparent_temperature_f",
-                "humidity_percent",
-                "wind_speed_mph",
-                "cloud_cover_percent"
-            ]]
-        )
+        count = 0
+        # Step 1: Find last valid weather timestamp
+        last_valid_weather_index = weather_df[weather_df["temperature_f"].notnull()].index.max()
+        for t in weather_df.loc[last_valid_weather_index:].index:
+            if pd.isna(weather_df.at[t, "temperature_f"]):
+                t_minus_24h = t - pd.Timedelta(hours=24)
+                if t_minus_24h in weather_df.index:
+                    weather_df.loc[t] = weather_df.loc[t_minus_24h]
+                    count += 1
+                else:
+                    print(f"⚠ Cannot fill {t} — no data at {t_minus_24h}")
 
-        # Index meter readings by 15-min start_time
-        elec_df = (
-            elec_df
-            .set_index("start_time")
-            .sort_index()[["consumption_kwh", "hour_timestamp"]]
-        )
+        if count:
+            print(f"Filled {count} missing weather timestamps by copying from 24h prior")
 
-        print(f"Loaded {len(elec_df)} electricity rows and {len(weather_hourly)} hourly weather rows")
-        return elec_df, weather_hourly
 
-    def create_training_set(self, elec_df, weather_hourly):
-        """
-        Build a DataFrame of training samples where each row is one 15-min interval:
-        - Features:
-            * hour, day_of_week, month, is_weekend, is_peak_hour, is_summer, is_winter
-            * temperature_f, apparent_temperature_f, humidity_percent, wind_speed_mph, cloud_cover_percent
-              (all at same hour, i.e., hour_timestamp)
-            * temp_deviation, heating_degree, cooling_degree
-            * cons_kwh_lag_24h (value of consumption exactly 24h earlier)
-        - Target:
-            * consumption_kwh (current)
-        """
-        # Join meter + weather
-        df = elec_df.merge(
-            weather_hourly,
-            left_on="hour_timestamp",
-            right_index=True,
-            how="inner"
-        )
-        df = df.sort_index()  # index = 15-min start_time
+        # Resample to 15-min intervals (using forward fill)
+        weather_15min = weather_df.resample("15T").ffill()
 
-        # Time-based flags
+        print(f"Loaded {len(elec_df)} electricity rows and {len(weather_15min)} weather rows (15-min aligned)")
+        return elec_df, weather_15min
+
+    def create_training_set(self, elec_df, weather_15min):
+        df = elec_df.merge(weather_15min, left_index=True, right_index=True, how="inner")
+        df = df.sort_index()
+
         df["hour"] = df.index.hour
-        df["day_of_week"] = df.index.dayofweek  # 0=Monday
+        df["day_of_week"] = df.index.dayofweek
         df["month"] = df.index.month
         df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
-        df["is_peak_hour"] = (
-            (df["hour"] >= 12) &
-            (df["hour"] < 20) &
-            (df["day_of_week"] < 5)
-        ).astype(int)
+        df["is_peak_hour"] = ((df["hour"] >= 12) & (df["hour"] < 20) & (df["day_of_week"] < 5)).astype(int)
         df["is_summer"] = df["month"].isin([6, 7, 8]).astype(int)
         df["is_winter"] = df["month"].isin([12, 1, 2]).astype(int)
 
-        # Temperature deviations
         df["temp_deviation"] = df["temperature_f"] - 65
         df["heating_degree"] = np.maximum(0, 65 - df["temperature_f"])
         df["cooling_degree"] = np.maximum(0, df["temperature_f"] - 75)
 
-        # “Same time yesterday” lag: shift index by 24 hours (96 intervals)
         df["cons_kwh_lag_24h"] = df["consumption_kwh"].shift(96)
-
-        # Drop any rows where the 24h lag is missing (first 24 hours cannot be used)
         df = df.dropna(subset=["cons_kwh_lag_24h"])
 
-        # Final feature list
         feature_cols = [
-            "hour",
-            "day_of_week",
-            "month",
-            "is_weekend",
-            "is_peak_hour",
-            "is_summer",
-            "is_winter",
-            "temperature_f",
-            "apparent_temperature_f",
-            "humidity_percent",
-            "wind_speed_mph",
-            "cloud_cover_percent",
-            "temp_deviation",
-            "heating_degree",
-            "cooling_degree",
+            "hour", "day_of_week", "month", "is_weekend", "is_peak_hour",
+            "is_summer", "is_winter",
+            "temperature_f", "apparent_temperature_f", "humidity_percent",
+            "wind_speed_mph", "cloud_cover_percent",
+            "temp_deviation", "heating_degree", "cooling_degree",
             "cons_kwh_lag_24h"
         ]
 
         X = df[feature_cols].copy()
         y = df["consumption_kwh"].copy()
-
-        # Store feature column order for later use
         self.feature_columns = feature_cols
-        print(f"Training set: {len(X)} samples after dropping missing 24h-lag")
+        print(f"Training set: {len(X)} rows")
         return X, y
 
     def train(self):
-        """Train the XGBoost model on all historical 15-min intervals."""
-        print("→ Loading data for training")
-        elec_df, weather_hourly = self.load_data()
-        print("→ Building training set (same-time yesterday lag only)")
-        X, y = self.create_training_set(elec_df, weather_hourly)
+        print("→ Loading data")
+        elec_df, weather_15min = self.load_data()
+        print("→ Creating training set")
+        X, y = self.create_training_set(elec_df, weather_15min)
 
-        # Time series split: keep last 20% as test
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, shuffle=False
-        )
-        print(f"  Train: {len(X_train)} rows | Test: {len(X_test)} rows")
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+        print(f"→ Training on {len(X_train)} rows")
 
-        print("→ Training XGBoost")
-        self.model.fit(
-            X_train,
-            y_train,
-            eval_set=[(X_test, y_test)],
-            # early_stopping_rounds=30,
-            verbose=False
-        )
+        self.model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
 
-        # Evaluate on hold-out
         y_pred = self.model.predict(X_test)
         mae = mean_absolute_error(y_test, y_pred)
         rmse = np.sqrt(mean_squared_error(y_test, y_pred))
         r2 = r2_score(y_test, y_pred)
 
-        print("\n🔎 Model performance on hold-out set:")
-        print(f"   MAE : {mae:.4f} kWh")
-        print(f"   RMSE: {rmse:.4f} kWh")
-        print(f"   R²  : {r2:.4f}\n")
-
-        # Feature importance
-        fi = pd.DataFrame({
-            "feature": self.feature_columns,
-            "importance": self.model.feature_importances_
-        }).sort_values("importance", ascending=False)
-        print("Top-8 features:")
-        print(fi.head(8).to_string(index=False))
+        print(f"→ MAE: {mae:.4f}  RMSE: {rmse:.4f}  R²: {r2:.4f}")
 
         self.is_trained = True
         return {"mae": mae, "rmse": rmse, "r2": r2}
 
-    def save_model(self, path="electricity-tracker/public/data/ml_model.pkl"):
-        """Persist trained model + feature_columns to disk."""
+    def predict_next_day(self):
         if not self.is_trained:
-            raise RuntimeError("Train the model before saving.")
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(
-            {
-                "model": self.model,
-                "feature_columns": self.feature_columns
-            },
-            path
-        )
-        print(f"✔ Model saved to {path}")
+            raise RuntimeError("Train or load the model first")
 
-    def load_model(self, path="electricity-tracker/public/data/ml_model.pkl"):
-        """Load a previously trained model from disk."""
-        if not Path(path).exists():
-            raise FileNotFoundError(f"Model file not found: {path}")
-        data = joblib.load(path)
-        self.model = data["model"]
-        self.feature_columns = data["feature_columns"]
-        self.is_trained = True
-        print(f"✔ Model loaded from {path}")
-
-    def predict_next_day(self, weather_hourly=None):
-        """
-        Generate 96 forecasts (15-min intervals) for the next calendar day [00:00→23:45].
-        Requires:
-          - A trained model (call load_model() or train() first)
-          - Historical meter readings and weather_df to be freshly loaded within this method
-        Forecast algorithm:
-        - Determine 'next_day_midnight' = (last_meter_timestamp.date() + 1 day) at 00:00:00
-        - For each 15-min step t in [next_day_midnight + k*15m, k=0..95]:
-            * Look up consumption at timestamp = t − 24 hours  → cons_kwh_lag_24h
-            * Look up weather at hour = (t − 24h).floor(H) from weather_hourly
-            * Construct feature row, then predict
-        - Return a list of dicts { "timestamp": ISO, "predicted_kwh": float }
-        """
-        if not self.is_trained:
-            raise RuntimeError("Model must be trained or loaded before prediction.")
-
-        # Reload data to get 'last_meter_timestamp' and weather
-        elec_df, wh = self.load_data()
-        history = elec_df.copy()  # index = 15-min start_time, columns = ['consumption_kwh']
-
-        # If caller didn’t provide weather_hourly, use the loaded one
-        weather_hourly = wh
-
-        # Find last timestamp in history and compute next day’s midnight
-        last_ts = history.index.max()
-        next_day_date = (last_ts.date() + timedelta(days=1))
-        next_day_midnight = datetime.combine(next_day_date, time(0, 0, 0))
-
-        # Build 96 consecutive timestamps at 15-min intervals
-        forecast_times = [
-            next_day_midnight + timedelta(minutes=15 * k) for k in range(96)
-        ]
+        elec_df, weather_15min = self.load_data()
+        last_ts = elec_df.index.max()
+        next_day_midnight = datetime.combine(last_ts.date() + timedelta(days=1), time.min)
 
         predictions = []
 
-        for ts in forecast_times:
+        for k in range(96):
+            ts = next_day_midnight + timedelta(minutes=15 * k)
             ts_yesterday = ts - timedelta(days=1)
-            # Check that history has that exact timestamp
-            if ts_yesterday not in history.index:
-                raise KeyError(
-                    f"Missing meter reading for {ts_yesterday.isoformat()}; "
-                    "cannot build 24h-lag feature."
-                )
-            lag_24h = float(history.at[ts_yesterday, "consumption_kwh"])
 
-            # Weather features: use the hour of ts_yesterday floored to hour
-            hour_key = ts_yesterday.replace(minute=0, second=0, microsecond=0)
-            if hour_key not in weather_hourly.index:
-                raise KeyError(
-                    f"Missing weather data for hour {hour_key.isoformat()}; "
-                    "cannot build weather features."
-                )
-            temp = float(weather_hourly.at[hour_key, "temperature_f"])
-            app_temp = float(weather_hourly.at[hour_key, "apparent_temperature_f"])
-            humidity = float(weather_hourly.at[hour_key, "humidity_percent"])
-            wind_spd = float(weather_hourly.at[hour_key, "wind_speed_mph"])
-            cloud_cov = float(weather_hourly.at[hour_key, "cloud_cover_percent"])
+            if ts_yesterday not in elec_df.index or ts_yesterday not in weather_15min.index:
+                ## TODO: the electricity data or the weather data may not be available for the previous day
+                ## What to do?
+                raise KeyError(f"Missing data for {ts_yesterday}")
 
-            # Time flags for ts (forecast point)
+            lag_24h = float(elec_df.at[ts_yesterday, "consumption_kwh"])
+            weather = weather_15min.loc[ts_yesterday]
+
             hour = ts.hour
             dow = ts.weekday()
             month = ts.month
-            is_weekend = int(dow >= 5)
-            is_peak = int((hour >= 12) and (hour < 20) and (dow < 5))
-            is_summer = int(month in [6, 7, 8])
-            is_winter = int(month in [12, 1, 2])
 
-            temp_dev = temp - 65.0
-            heating_deg = max(0.0, 65.0 - temp)
-            cooling_deg = max(0.0, temp - 75.0)
-
-            # Construct feature vector
-            feat = {
+            features = {
                 "hour": hour,
                 "day_of_week": dow,
                 "month": month,
-                "is_weekend": is_weekend,
-                "is_peak_hour": is_peak,
-                "is_summer": is_summer,
-                "is_winter": is_winter,
-                "temperature_f": temp,
-                "apparent_temperature_f": app_temp,
-                "humidity_percent": humidity,
-                "wind_speed_mph": wind_spd,
-                "cloud_cover_percent": cloud_cov,
-                "temp_deviation": temp_dev,
-                "heating_degree": heating_deg,
-                "cooling_degree": cooling_deg,
+                "is_weekend": int(dow >= 5),
+                "is_peak_hour": int((12 <= hour < 20) and dow < 5),
+                "is_summer": int(month in [6, 7, 8]),
+                "is_winter": int(month in [12, 1, 2]),
+                "temperature_f": weather["temperature_f"],
+                "apparent_temperature_f": weather["apparent_temperature_f"],
+                "humidity_percent": weather["humidity_percent"],
+                "wind_speed_mph": weather["wind_speed_mph"],
+                "cloud_cover_percent": weather["cloud_cover_percent"],
+                "temp_deviation": weather["temperature_f"] - 65,
+                "heating_degree": max(0, 65 - weather["temperature_f"]),
+                "cooling_degree": max(0, weather["temperature_f"] - 75),
                 "cons_kwh_lag_24h": lag_24h
             }
 
-            # Align column order
-            X_row = np.array([feat[col] for col in self.feature_columns]).reshape(1, -1)
-            y_pred = self.model.predict(X_row).item()
+            X_row = np.array([features[col] for col in self.feature_columns]).reshape(1, -1)
+            pred = self.model.predict(X_row).item()
 
             predictions.append({
                 "timestamp": ts.isoformat(),
-                "predicted_kwh": max(0.0, float(y_pred))
+                "predicted_kwh": max(0.0, float(pred))
             })
 
         return predictions
 
+    def save_model(self, path="electricity-tracker/public/data/ml_model.pkl"):
+        joblib.dump({
+            "model": self.model,
+            "feature_columns": self.feature_columns
+        }, path)
+        print(f"Model saved to {path}")
+
+    def load_model(self, path="electricity-tracker/public/data/ml_model.pkl"):
+        data = joblib.load(path)
+        self.model = data["model"]
+        self.feature_columns = data["feature_columns"]
+        self.is_trained = True
 
 def main():
-    """Orchestrate training (or loading) and write tomorrow’s forecast to JSON."""
     predictor = ElectricityPredictor()
-
-    # Decide: if a saved model exists, load it; otherwise, train from scratch
     model_path = Path("electricity-tracker/public/data/ml_model.pkl")
+
     if model_path.exists():
         print("→ Loading existing model")
-        predictor.load_model(str(model_path))
+        predictor.load_model(model_path)
     else:
-        print("→ No saved model found; training afresh")
+        print("→ Training new model")
         metrics = predictor.train()
-        predictor.save_model(str(model_path))
+        predictor.save_model(model_path)
 
-    # Generate next-day forecast (to run at midnight)
-    print("→ Generating next-day forecast")
+    print("→ Generating forecast")
     predictions = predictor.predict_next_day()
 
-    # Write JSON output
     output_path = Path("electricity-tracker/public/data/predictions.json")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump({
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
-                "forecast_horizon": "next_calendar_day",
                 "forecast_intervals": 96
             },
             "predictions": predictions
         }, f, indent=2)
 
     print(f"✔ Forecast written to {output_path}")
-
 
 if __name__ == "__main__":
     main()

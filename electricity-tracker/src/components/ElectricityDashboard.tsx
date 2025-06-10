@@ -46,7 +46,7 @@ export default function ElectricityDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d')
-  const [activeTab, setActiveTab] = useState<'overview' | 'disaggregation'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'disaggregation' | 'cost'>('overview')
 
   useEffect(() => {
     loadData()
@@ -159,6 +159,123 @@ export default function ElectricityDashboard() {
     return (withTemps.reduce((sum, d) => sum + d.temperature_f, 0) / withTemps.length).toFixed(1);
   }
 
+  const getYesterdayData = () => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(0, 0, 0, 0)
+    
+    const endOfYesterday = new Date(yesterday)
+    endOfYesterday.setHours(23, 59, 59, 999)
+    
+    return combinedData.filter(d => {
+      const dataDate = new Date(d.timestamp)
+      return dataDate >= yesterday && dataDate <= endOfYesterday
+    })
+  }
+
+  const calculateCostBredown = (usage: number) => {
+    const variableBreakdown = []
+    const fixedBreakdown = []
+    let variableCost = 0
+    let fixedCost = 0
+    
+    // Variable costs (usage-based)
+    const supplyRate = 0.11953 // 11.953c/kWh
+    const supplyCost = usage * supplyRate
+    variableBreakdown.push({
+      tier: 'Supply',
+      usage: usage,
+      rate: supplyRate,
+      cost: supplyCost,
+      description: '11.953¢/kWh'
+    })
+    variableCost += supplyCost
+    
+    const deliveryRate = 0.17745 // 17.745c/kWh
+    const deliveryCost = usage * deliveryRate
+    variableBreakdown.push({
+      tier: 'Delivery',
+      usage: usage,
+      rate: deliveryRate,
+      cost: deliveryCost,
+      description: '17.745¢/kWh'
+    })
+    variableCost += deliveryCost
+    
+    const systemBenefitRate = 0.00689 // 0.689c/kWh
+    const systemBenefitCost = usage * systemBenefitRate
+    variableBreakdown.push({
+      tier: 'System Benefit Charge',
+      usage: usage,
+      rate: systemBenefitRate,
+      cost: systemBenefitCost,
+      description: '0.689¢/kWh'
+    })
+    variableCost += systemBenefitCost
+    
+    // Variable costs tax
+    const variableTax = variableCost * 0.045
+    variableBreakdown.push({
+      tier: 'Sales Tax on Usage',
+      usage: null,
+      rate: null,
+      cost: variableTax,
+      description: '4.5% on variable charges'
+    })
+    variableCost += variableTax
+    
+    // Fixed costs (monthly)
+    const merchantCharge = 0.50
+    fixedBreakdown.push({
+      tier: 'Merchant Function Charge',
+      usage: null,
+      rate: null,
+      cost: merchantCharge,
+      description: 'Monthly fixed fee'
+    })
+    fixedCost += merchantCharge
+    
+    const basicServiceCharge = 20.61
+    fixedBreakdown.push({
+      tier: 'Basic Service Charge',
+      usage: null,
+      rate: null,
+      cost: basicServiceCharge,
+      description: 'Monthly fixed fee'
+    })
+    fixedCost += basicServiceCharge
+    
+    const grt = 1.92
+    fixedBreakdown.push({
+      tier: 'GRT',
+      usage: null,
+      rate: null,
+      cost: grt,
+      description: 'Monthly fixed fee'
+    })
+    fixedCost += grt
+    
+    // Fixed costs tax
+    const fixedTax = fixedCost * 0.045
+    fixedBreakdown.push({
+      tier: 'Sales Tax on Fixed Charges',
+      usage: null,
+      rate: null,
+      cost: fixedTax,
+      description: '4.5% on fixed charges'
+    })
+    fixedCost += fixedTax
+    
+    return { 
+      variableBreakdown, 
+      fixedBreakdown, 
+      variableCost, 
+      fixedCost,
+      totalDailyCost: variableCost + (fixedCost / 30), // Daily portion of fixed costs
+      projectedMonthlyCost: (variableCost * 30) + fixedCost
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -209,10 +326,134 @@ export default function ElectricityDashboard() {
         >
           Appliance Analysis
         </button>
+        <button
+          onClick={() => setActiveTab('cost')}
+          className={`px-4 py-2 border-b-2 ${
+            activeTab === 'cost' 
+              ? 'border-blue-500 text-blue-600 font-semibold' 
+              : 'border-transparent text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          Cost Insights
+        </button>
       </div>
 
       {activeTab === 'disaggregation' ? (
         <LoadDisaggregation />
+      ) : activeTab === 'cost' ? (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-4">Yesterday's Electricity Cost</h3>
+            {(() => {
+              const yesterdayData = getYesterdayData()
+              const totalUsage = yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+              const { variableBreakdown, fixedBreakdown, variableCost, fixedCost, totalDailyCost, projectedMonthlyCost } = calculateCostBredown(totalUsage)
+              
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">${variableCost.toFixed(2)}</div>
+                        <div className="text-gray-600">Yesterday's Variable Cost</div>
+                        <div className="text-sm text-gray-500">{totalUsage.toFixed(2)} kWh usage</div>
+                      </div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">${projectedMonthlyCost.toFixed(2)}</div>
+                        <div className="text-gray-600">Projected Monthly Bill</div>
+                        <div className="text-sm text-gray-500">If all days like yesterday</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-semibold mb-3">Variable Costs (Usage-Based)</h4>
+                      <div className="space-y-2">
+                        {variableBreakdown.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                            <div>
+                              <div className="font-medium">{item.tier}</div>
+                              <div className="text-sm text-gray-600">{item.description}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">${item.cost.toFixed(2)}</div>
+                              {item.usage && (
+                                <div className="text-sm text-gray-600">{item.usage.toFixed(2)} kWh</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-semibold mb-3">Fixed Costs (Monthly)</h4>
+                      <div className="space-y-2">
+                        {fixedBreakdown.map((item, index) => (
+                          <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                            <div>
+                              <div className="font-medium">{item.tier}</div>
+                              <div className="text-sm text-gray-600">{item.description}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">${item.cost.toFixed(2)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 p-3 bg-blue-100 rounded">
+                        <div className="flex justify-between font-semibold">
+                          <span>Total Fixed Costs</span>
+                          <span>${fixedCost.toFixed(2)}/month</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {yesterdayData.length === 0 && (
+                    <div className="text-center text-gray-500 py-8">
+                      No data available for yesterday
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+          
+          {(() => {
+            const yesterdayData = getYesterdayData()
+            return yesterdayData.length > 0 && (
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h3 className="text-lg font-semibold mb-4">Yesterday's Usage Pattern</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={yesterdayData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="timestamp"
+                      tickFormatter={(value) => format(parseISO(value), 'HH:mm')}
+                    />
+                    <YAxis />
+                    <Tooltip 
+                      labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
+                      formatter={(value: number) => [value.toFixed(3), 'kWh']}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="consumption_kwh" 
+                      stroke="#059669" 
+                      strokeWidth={2}
+                      dot={false}
+                      name="Usage (kWh)"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )
+          })()}
+        </div>
       ) : (
         <>
           <div className="flex flex-wrap gap-4 items-center justify-between">
@@ -257,7 +498,7 @@ export default function ElectricityDashboard() {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">Electricity Usage Over Time</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={filteredData.slice(-200)}>
+            <LineChart data={filteredData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="timestamp"
@@ -284,7 +525,7 @@ export default function ElectricityDashboard() {
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">Usage vs Temperature</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={filteredData.slice(-200)}>
+            <LineChart data={filteredData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="timestamp"
