@@ -173,6 +173,19 @@ export default function ElectricityDashboard() {
     })
   }
 
+  const getCurrentMonthData = () => {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(23, 59, 59, 999)
+    
+    return combinedData.filter(d => {
+      const dataDate = new Date(d.timestamp)
+      return dataDate >= startOfMonth && dataDate <= yesterday
+    })
+  }
+
   const calculateCostBredown = (usage: number) => {
     const variableBreakdown = []
     const fixedBreakdown = []
@@ -346,8 +359,21 @@ export default function ElectricityDashboard() {
             <h3 className="text-lg font-semibold mb-4">Yesterday's Electricity Cost</h3>
             {(() => {
               const yesterdayData = getYesterdayData()
-              const totalUsage = yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-              const { variableBreakdown, fixedBreakdown, variableCost, fixedCost, totalDailyCost, projectedMonthlyCost } = calculateCostBredown(totalUsage)
+              const currentMonthData = getCurrentMonthData()
+              const yesterdayUsage = yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+              const monthToDateUsage = currentMonthData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+              
+              const now = new Date()
+              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+              const dayOfMonth = now.getDate()
+              const remainingDays = daysInMonth - dayOfMonth + 1 // +1 because we want to include today
+              
+              const projectedRemainingUsage = yesterdayUsage * remainingDays
+              const totalProjectedUsage = monthToDateUsage + projectedRemainingUsage
+              
+              const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBredown(yesterdayUsage)
+              const monthToDateCost = calculateCostBredown(monthToDateUsage)
+              const projectedMonthlyCost = (monthToDateCost.variableCost + (projectedRemainingUsage * (variableCost / yesterdayUsage))) + fixedCost
               
               return (
                 <div className="space-y-4">
@@ -356,14 +382,14 @@ export default function ElectricityDashboard() {
                       <div className="text-center">
                         <div className="text-2xl font-bold text-blue-600">${variableCost.toFixed(2)}</div>
                         <div className="text-gray-600">Yesterday's Variable Cost</div>
-                        <div className="text-sm text-gray-500">{totalUsage.toFixed(2)} kWh usage</div>
+                        <div className="text-sm text-gray-500">{yesterdayUsage.toFixed(2)} kWh usage</div>
                       </div>
                     </div>
                     <div className="bg-green-50 p-4 rounded-lg">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-green-600">${projectedMonthlyCost.toFixed(2)}</div>
                         <div className="text-gray-600">Projected Monthly Bill</div>
-                        <div className="text-sm text-gray-500">If all days like yesterday</div>
+                        <div className="text-sm text-gray-500">{monthToDateUsage.toFixed(0)} kWh used + {projectedRemainingUsage.toFixed(0)} kWh projected = {totalProjectedUsage.toFixed(0)} kWh</div>
                       </div>
                     </div>
                   </div>
