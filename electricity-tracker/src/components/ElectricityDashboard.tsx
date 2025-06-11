@@ -47,6 +47,7 @@ export default function ElectricityDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d')
   const [activeTab, setActiveTab] = useState<'overview' | 'disaggregation' | 'cost'>('overview')
+  const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -183,6 +184,83 @@ export default function ElectricityDashboard() {
     return combinedData.filter(d => {
       const dataDate = new Date(d.timestamp)
       return dataDate >= startOfMonth && dataDate <= yesterday
+    })
+  }
+
+  const getLast7DaysData = () => {
+    const now = new Date()
+    const last7Days = []
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now)
+      date.setDate(date.getDate() - i)
+      date.setHours(0, 0, 0, 0)
+      
+      const endOfDay = new Date(date)
+      endOfDay.setHours(23, 59, 59, 999)
+      
+      const dayData = combinedData.filter(d => {
+        const dataDate = new Date(d.timestamp)
+        return dataDate >= date && dataDate <= endOfDay
+      })
+      
+      const totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+      const totalCost = calculateCostBredown(totalUsage).variableCost
+      
+      const avgTemp = dayData.length > 0 
+        ? dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
+            .reduce((sum, d, _, arr) => sum + (d.temperature_f! / arr.length), 0)
+        : null
+      
+      last7Days.push({
+        date: format(date, 'yyyy-MM-dd'),
+        displayDate: format(date, 'MMM dd'),
+        dayOfWeek: format(date, 'EEE'),
+        usage: totalUsage,
+        cost: totalCost,
+        avgTemp: avgTemp,
+        isToday: format(date, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd'),
+        isYesterday: format(date, 'yyyy-MM-dd') === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+      })
+    }
+    
+    return last7Days
+  }
+
+  const getModelDayProjection = (modelDayUsage: number) => {
+    const now = new Date()
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const dayOfMonth = now.getDate()
+    const remainingDays = daysInMonth - dayOfMonth + 1
+    
+    const currentMonthData = getCurrentMonthData()
+    const monthToDateUsage = currentMonthData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+    
+    const projectedRemainingUsage = modelDayUsage * remainingDays
+    const totalProjectedUsage = monthToDateUsage + projectedRemainingUsage
+    
+    const monthToDateCost = calculateCostBredown(monthToDateUsage)
+    const remainingCost = calculateCostBredown(projectedRemainingUsage)
+    const projectedMonthlyCost = monthToDateCost.variableCost + remainingCost.variableCost + calculateCostBredown(0).fixedCost
+    
+    return {
+      monthToDateUsage,
+      projectedRemainingUsage,
+      totalProjectedUsage,
+      projectedMonthlyCost
+    }
+  }
+
+  const getSelectedDayData = (selectedDate: string) => {
+    const date = new Date(selectedDate)
+    date.setHours(0, 0, 0, 0)
+    
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+    
+    return combinedData.filter(d => {
+      const dataDate = new Date(d.timestamp)
+      return dataDate >= date && dataDate <= endOfDay
     })
   }
 
@@ -354,64 +432,166 @@ export default function ElectricityDashboard() {
       {activeTab === 'disaggregation' ? (
         <LoadDisaggregation />
       ) : activeTab === 'cost' ? (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold mb-4">Yesterday's Electricity Cost</h3>
-            {(() => {
-              const yesterdayData = getYesterdayData()
-              const currentMonthData = getCurrentMonthData()
-              const yesterdayUsage = yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-              const monthToDateUsage = currentMonthData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-              
-              const now = new Date()
-              const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-              const dayOfMonth = now.getDate()
-              const remainingDays = daysInMonth - dayOfMonth + 1 // +1 because we want to include today
-              
-              const projectedRemainingUsage = yesterdayUsage * remainingDays
-              const totalProjectedUsage = monthToDateUsage + projectedRemainingUsage
-              
-              const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBredown(yesterdayUsage)
-              const monthToDateCost = calculateCostBredown(monthToDateUsage)
-              const projectedMonthlyCost = (monthToDateCost.variableCost + (projectedRemainingUsage * (variableCost / yesterdayUsage))) + fixedCost
-              
-              return (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">${variableCost.toFixed(2)}</div>
-                        <div className="text-gray-600">Yesterday's Variable Cost</div>
-                        <div className="text-sm text-gray-500">{yesterdayUsage.toFixed(2)} kWh usage</div>
-                      </div>
-                    </div>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2 space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-4">Daily Usage & Cost Insights - Last 7 Days</h3>
+              {(() => {
+                const last7DaysData = getLast7DaysData()
+                
+                return (
+                  <div className="grid grid-cols-7 gap-2">
+                    {last7DaysData.map((day) => (
+                      <button
+                        key={day.date}
+                        onClick={() => setSelectedModelDay(day.date)}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        } ${day.isToday ? 'opacity-50' : ''}`}
+                        disabled={day.isToday}
+                      >
+                        <div className="text-center">
+                          <div className="text-xs font-medium text-gray-600">{day.dayOfWeek}</div>
+                          <div className="text-sm font-semibold">{day.displayDate}</div>
+                          <div className="text-lg font-bold text-green-600 mt-1">{day.usage.toFixed(1)}</div>
+                          <div className="text-xs text-gray-500">kWh</div>
+                          <div className="text-sm font-semibold text-blue-600">${day.cost.toFixed(2)}</div>
+                          {day.avgTemp !== null && (
+                            <div className="text-xs text-orange-600 font-medium">{day.avgTemp.toFixed(0)}°F</div>
+                          )}
+                          {day.isToday && <div className="text-xs text-gray-400 mt-1">Today</div>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div>
+            
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-4">
+                {(() => {
+                  const last7DaysData = getLast7DaysData()
+                  const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
+                  return `${selectedDay?.displayDate || 'Yesterday'}'s Usage Pattern`
+                })()}
+              </h3>
+              {(() => {
+                const selectedDate = selectedModelDay || format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+                const selectedDayData = getSelectedDayData(selectedDate)
+                
+                return selectedDayData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={selectedDayData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="timestamp"
+                        tickFormatter={(value) => format(parseISO(value), 'HH:mm')}
+                      />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip 
+                        labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
+                        formatter={(value: number, name: string) => [
+                          name === 'Usage (kWh)' ? value.toFixed(3) : value.toFixed(1),
+                          name
+                        ]}
+                      />
+                      <Legend />
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="consumption_kwh" 
+                        stroke="#059669" 
+                        strokeWidth={2}
+                        dot={false}
+                        name="Usage (kWh)"
+                      />
+                      <Line 
+                        yAxisId="right"
+                        type="monotone" 
+                        dataKey="temperature_f" 
+                        stroke="#f59e0b" 
+                        strokeWidth={2}
+                        dot={false}
+                        name="Temperature (°F)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No data available for selected day
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+          
+          <div className="xl:col-span-1 space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-4">
+                Projected Monthly Costs
+                {(() => {
+                  const last7DaysData = getLast7DaysData()
+                  const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
+                  return ` (based on ${selectedDay?.displayDate || 'Yesterday'})`
+                })()}
+              </h3>
+              {(() => {
+                const last7DaysData = getLast7DaysData()
+                const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
+                const selectedDayUsage = selectedDay?.usage || 0
+                const projection = getModelDayProjection(selectedDayUsage)
+                
+                // Calculate breakdown for the total projected monthly usage
+                const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBredown(projection.totalProjectedUsage)
+                
+                return (
+                  <div className="space-y-4">
                     <div className="bg-green-50 p-4 rounded-lg">
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">${projectedMonthlyCost.toFixed(2)}</div>
+                        <div className="text-2xl font-bold text-green-600">${(variableCost + fixedCost).toFixed(2)}</div>
                         <div className="text-gray-600">Projected Monthly Bill</div>
-                        <div className="text-sm text-gray-500">{monthToDateUsage.toFixed(0)} kWh used + {projectedRemainingUsage.toFixed(0)} kWh projected = {totalProjectedUsage.toFixed(0)} kWh</div>
+                        <div className="text-sm text-gray-500">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-blue-50 p-2 rounded">
+                        <div className="font-semibold">{projection.monthToDateUsage.toFixed(0)} kWh</div>
+                        <div className="text-gray-600">Used to Date</div>
+                      </div>
+                      <div className="bg-orange-50 p-2 rounded">
+                        <div className="font-semibold">{projection.projectedRemainingUsage.toFixed(0)} kWh</div>
+                        <div className="text-gray-600">Projected Remaining</div>
+                      </div>
+                    </div>
+                    
                     <div>
                       <h4 className="font-semibold mb-3">Variable Costs (Usage-Based)</h4>
                       <div className="space-y-2">
                         {variableBreakdown.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                          <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
                             <div>
                               <div className="font-medium">{item.tier}</div>
-                              <div className="text-sm text-gray-600">{item.description}</div>
+                              <div className="text-xs text-gray-600">{item.description}</div>
                             </div>
                             <div className="text-right">
                               <div className="font-medium">${item.cost.toFixed(2)}</div>
                               {item.usage && (
-                                <div className="text-sm text-gray-600">{item.usage.toFixed(2)} kWh</div>
+                                <div className="text-xs text-gray-600">{item.usage.toFixed(0)} kWh</div>
                               )}
                             </div>
                           </div>
                         ))}
+                      </div>
+                      <div className="mt-2 p-2 bg-blue-100 rounded">
+                        <div className="flex justify-between font-semibold text-sm">
+                          <span>Total Variable Costs</span>
+                          <span>${variableCost.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
                     
@@ -419,10 +599,10 @@ export default function ElectricityDashboard() {
                       <h4 className="font-semibold mb-3">Fixed Costs (Monthly)</h4>
                       <div className="space-y-2">
                         {fixedBreakdown.map((item, index) => (
-                          <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                          <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
                             <div>
                               <div className="font-medium">{item.tier}</div>
-                              <div className="text-sm text-gray-600">{item.description}</div>
+                              <div className="text-xs text-gray-600">{item.description}</div>
                             </div>
                             <div className="text-right">
                               <div className="font-medium">${item.cost.toFixed(2)}</div>
@@ -430,55 +610,18 @@ export default function ElectricityDashboard() {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-3 p-3 bg-blue-100 rounded">
-                        <div className="flex justify-between font-semibold">
+                      <div className="mt-2 p-2 bg-blue-100 rounded">
+                        <div className="flex justify-between font-semibold text-sm">
                           <span>Total Fixed Costs</span>
-                          <span>${fixedCost.toFixed(2)}/month</span>
+                          <span>${fixedCost.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  
-                  {yesterdayData.length === 0 && (
-                    <div className="text-center text-gray-500 py-8">
-                      No data available for yesterday
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+                )
+              })()}
+            </div>
           </div>
-          
-          {(() => {
-            const yesterdayData = getYesterdayData()
-            return yesterdayData.length > 0 && (
-              <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold mb-4">Yesterday's Usage Pattern</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={yesterdayData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="timestamp"
-                      tickFormatter={(value) => format(parseISO(value), 'HH:mm')}
-                    />
-                    <YAxis />
-                    <Tooltip 
-                      labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
-                      formatter={(value: number) => [value.toFixed(3), 'kWh']}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="consumption_kwh" 
-                      stroke="#059669" 
-                      strokeWidth={2}
-                      dot={false}
-                      name="Usage (kWh)"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )
-          })()}
         </div>
       ) : (
         <>
