@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
@@ -48,6 +48,7 @@ export default function ElectricityDashboard() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d')
   const [activeTab, setActiveTab] = useState<'overview' | 'disaggregation' | 'cost'>('overview')
   const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -187,25 +188,39 @@ export default function ElectricityDashboard() {
     })
   }
 
-  const getLast7DaysData = () => {
+  // Memoize daily data buckets to avoid repeated filtering
+  const dailyDataBuckets = useMemo(() => {
+    const buckets = new Map<string, CombinedDataPoint[]>()
+    
+    combinedData.forEach(d => {
+      const dateKey = d.timestamp.substring(0, 10) // YYYY-MM-DD
+      if (!buckets.has(dateKey)) {
+        buckets.set(dateKey, [])
+      }
+      buckets.get(dateKey)!.push(d)
+    })
+    
+    return buckets
+  }, [combinedData])
+
+  const getTodayData = useMemo(() => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    return dailyDataBuckets.get(today) || []
+  }, [dailyDataBuckets])
+
+  const getLast7DaysData = useMemo(() => {
     const now = new Date()
     const last7Days = []
     
     for (let i = 6; i >= 0; i--) {
       const date = new Date(now)
       date.setDate(date.getDate() - i)
-      date.setHours(0, 0, 0, 0)
+      const dateKey = format(date, 'yyyy-MM-dd')
       
-      const endOfDay = new Date(date)
-      endOfDay.setHours(23, 59, 59, 999)
-      
-      const dayData = combinedData.filter(d => {
-        const dataDate = new Date(d.timestamp)
-        return dataDate >= date && dataDate <= endOfDay
-      })
+      const dayData = dailyDataBuckets.get(dateKey) || []
       
       const totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-      const totalCost = calculateCostBredown(totalUsage).variableCost
+      const totalCost = calculateCostBreakdown(totalUsage).variableCost
       
       const avgTemp = dayData.length > 0 
         ? dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
@@ -213,19 +228,19 @@ export default function ElectricityDashboard() {
         : null
       
       last7Days.push({
-        date: format(date, 'yyyy-MM-dd'),
+        date: dateKey,
         displayDate: format(date, 'MMM dd'),
         dayOfWeek: format(date, 'EEE'),
         usage: totalUsage,
         cost: totalCost,
         avgTemp: avgTemp,
-        isToday: format(date, 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd'),
-        isYesterday: format(date, 'yyyy-MM-dd') === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        isToday: dateKey === format(now, 'yyyy-MM-dd'),
+        isYesterday: dateKey === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
       })
     }
     
     return last7Days
-  }
+  }, [dailyDataBuckets])
 
   const getModelDayProjection = (modelDayUsage: number) => {
     const now = new Date()
@@ -239,9 +254,9 @@ export default function ElectricityDashboard() {
     const projectedRemainingUsage = modelDayUsage * remainingDays
     const totalProjectedUsage = monthToDateUsage + projectedRemainingUsage
     
-    const monthToDateCost = calculateCostBredown(monthToDateUsage)
-    const remainingCost = calculateCostBredown(projectedRemainingUsage)
-    const projectedMonthlyCost = monthToDateCost.variableCost + remainingCost.variableCost + calculateCostBredown(0).fixedCost
+    const monthToDateCost = calculateCostBreakdown(monthToDateUsage)
+    const remainingCost = calculateCostBreakdown(projectedRemainingUsage)
+    const projectedMonthlyCost = monthToDateCost.variableCost + remainingCost.variableCost + calculateCostBreakdown(0).fixedCost
     
     return {
       monthToDateUsage,
@@ -251,20 +266,13 @@ export default function ElectricityDashboard() {
     }
   }
 
-  const getSelectedDayData = (selectedDate: string) => {
-    const date = new Date(selectedDate)
-    date.setHours(0, 0, 0, 0)
-    
-    const endOfDay = new Date(date)
-    endOfDay.setHours(23, 59, 59, 999)
-    
-    return combinedData.filter(d => {
-      const dataDate = new Date(d.timestamp)
-      return dataDate >= date && dataDate <= endOfDay
-    })
-  }
+  const getSelectedDayData = useMemo(() => {
+    return (selectedDate: string) => {
+      return dailyDataBuckets.get(selectedDate) || []
+    }
+  }, [dailyDataBuckets])
 
-  const calculateCostBredown = (usage: number) => {
+  function calculateCostBreakdown(usage: number) {
     const variableBreakdown = []
     const fixedBreakdown = []
     let variableCost = 0
@@ -437,20 +445,21 @@ export default function ElectricityDashboard() {
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-4">Daily Usage & Cost Insights - Last 7 Days</h3>
               {(() => {
-                const last7DaysData = getLast7DaysData()
+                const last7DaysData = getLast7DaysData
                 
                 return (
                   <div className="grid grid-cols-7 gap-2">
                     {last7DaysData.map((day) => (
                       <button
                         key={day.date}
-                        onClick={() => setSelectedModelDay(day.date)}
+                        onClick={() => !day.isToday && setSelectedModelDay(day.date)}
+                        onMouseEnter={() => setHoveredDay(day.date)}
+                        onMouseLeave={() => setHoveredDay(null)}
                         className={`p-3 rounded-lg border-2 transition-all ${
                           selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
                             ? 'border-blue-500 bg-blue-50'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                        } ${day.isToday ? 'opacity-50' : ''}`}
-                        disabled={day.isToday}
+                        } ${day.isToday ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}
                       >
                         <div className="text-center">
                           <div className="text-xs font-medium text-gray-600">{day.dayOfWeek}</div>
@@ -473,29 +482,52 @@ export default function ElectricityDashboard() {
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold mb-4">
                 {(() => {
-                  const last7DaysData = getLast7DaysData()
+                  const last7DaysData = getLast7DaysData
                   const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
                   return `${selectedDay?.displayDate || 'Yesterday'}'s Usage Pattern`
                 })()}
               </h3>
               {(() => {
-                const selectedDate = selectedModelDay || format(new Date(Date.now() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+                const yesterday = new Date()
+                yesterday.setDate(yesterday.getDate() - 1)
+                const selectedDate = selectedModelDay || format(yesterday, 'yyyy-MM-dd')
                 const selectedDayData = getSelectedDayData(selectedDate)
+                // Get hovered day data if hovering
+                const hoveredDayData = hoveredDay ? getSelectedDayData(hoveredDay) : []
+                const showHoveredOverlay = hoveredDay && hoveredDayData.length > 0
+                
+                // Create combined data with hovered day overlay mapped to selected day's timeline
+                const chartData = selectedDayData.map(point => {
+                  const result = { ...point }
+                  
+                  if (showHoveredOverlay) {
+                    // Match by time of day (HH:mm:ss)
+                    const selectedTime = format(parseISO(point.timestamp), 'HH:mm:ss')
+                    const hoveredPoint = hoveredDayData.find(h => 
+                      format(parseISO(h.timestamp), 'HH:mm:ss') === selectedTime
+                    )
+                    result.hoveredDayUsage = hoveredPoint?.consumption_kwh || null
+                  } else {
+                    result.hoveredDayUsage = null
+                  }
+                  
+                  return result
+                })
                 
                 return selectedDayData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={selectedDayData}>
+                    <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         dataKey="timestamp"
                         tickFormatter={(value) => format(parseISO(value), 'HH:mm')}
                       />
-                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="left" domain={[0, 1]} />
                       <YAxis yAxisId="right" orientation="right" />
                       <Tooltip 
                         labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
                         formatter={(value: number, name: string) => [
-                          name === 'Usage (kWh)' ? value.toFixed(3) : value.toFixed(1),
+                          name === 'Usage (kWh)' || name === "Today's Usage" ? value.toFixed(3) : value.toFixed(1),
                           name
                         ]}
                       />
@@ -518,6 +550,19 @@ export default function ElectricityDashboard() {
                         dot={false}
                         name="Temperature (°F)"
                       />
+                      <Line 
+                        yAxisId="left"
+                        type="monotone" 
+                        dataKey="hoveredDayUsage"
+                        stroke="#3b82f6" 
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        name="Hovered Day Usage"
+                        connectNulls={false}
+                        strokeOpacity={showHoveredOverlay ? 1 : 0}
+                        isAnimationActive={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -534,19 +579,19 @@ export default function ElectricityDashboard() {
               <h3 className="text-lg font-semibold mb-4">
                 Projected Monthly Costs
                 {(() => {
-                  const last7DaysData = getLast7DaysData()
+                  const last7DaysData = getLast7DaysData
                   const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
                   return ` (based on ${selectedDay?.displayDate || 'Yesterday'})`
                 })()}
               </h3>
               {(() => {
-                const last7DaysData = getLast7DaysData()
+                const last7DaysData = getLast7DaysData
                 const selectedDay = selectedModelDay ? last7DaysData.find(d => d.date === selectedModelDay) : last7DaysData.find(d => d.isYesterday)
                 const selectedDayUsage = selectedDay?.usage || 0
                 const projection = getModelDayProjection(selectedDayUsage)
                 
                 // Calculate breakdown for the total projected monthly usage
-                const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBredown(projection.totalProjectedUsage)
+                const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
                 
                 return (
                   <div className="space-y-4">
