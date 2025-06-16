@@ -190,13 +190,20 @@ class ElectricityPredictor:
             ts = next_day_midnight + timedelta(minutes=15 * k)
             ts_yesterday = ts - timedelta(days=1)
 
-            if ts_yesterday not in elec_df.index or ts_yesterday not in weather_15min.index:
-                ## TODO: the electricity data or the weather data may not be available for the previous day
-                ## What to do?
-                raise KeyError(f"Missing data for {ts_yesterday}")
+            if ts_yesterday not in elec_df.index:
+                raise KeyError(f"Missing electricity data for {ts_yesterday}")
 
             lag_24h = float(elec_df.at[ts_yesterday, "consumption_kwh"])
-            weather = weather_15min.loc[ts_yesterday]
+            
+            # Try to get weather for the prediction timestamp (could be forecast)
+            if ts in weather_15min.index:
+                weather = weather_15min.loc[ts]
+            elif ts_yesterday in weather_15min.index:
+                # Fallback to yesterday's weather if forecast not available
+                weather = weather_15min.loc[ts_yesterday]
+                print(f"⚠ Using yesterday's weather for {ts} (forecast not available)")
+            else:
+                raise KeyError(f"Missing weather data for both {ts} and {ts_yesterday}")
 
             hour = ts.hour
             dow = ts.weekday()
@@ -230,6 +237,105 @@ class ElectricityPredictor:
             })
 
         return predictions
+
+    def predict_billing_period_remaining(self, bill_end_date: date):
+        """
+        Predict remaining usage for the entire billing period using forecast weather.
+        
+        Args:
+            bill_end_date: End date of the billing period
+            
+        Returns:
+            Dictionary with daily predictions and totals
+        """
+        if not self.is_trained:
+            raise RuntimeError("Train or load the model first")
+
+        elec_df, weather_15min = self.load_data()
+        
+        # Start from tomorrow and predict until bill end date
+        start_date = date.today() + timedelta(days=1)
+        current_date = start_date
+        
+        daily_predictions = []
+        total_predicted_usage = 0.0
+        
+        while current_date <= bill_end_date:
+            daily_usage = 0.0
+            daily_intervals = []
+            
+            # Predict each 15-minute interval for this day
+            for k in range(96):  # 96 intervals in 24 hours
+                ts = datetime.combine(current_date, time.min) + timedelta(minutes=15 * k)
+                ts_yesterday = ts - timedelta(days=1)
+                
+                # Get lag feature from 24 hours ago
+                if ts_yesterday in elec_df.index:
+                    lag_24h = float(elec_df.at[ts_yesterday, "consumption_kwh"])
+                else:
+                    # If no historical data, use average for that hour
+                    hour_data = elec_df[elec_df.index.hour == ts.hour]
+                    lag_24h = hour_data["consumption_kwh"].mean() if len(hour_data) > 0 else 0.2
+                
+                # Get weather for prediction time (should be forecast if in future)
+                if ts in weather_15min.index:
+                    weather = weather_15min.loc[ts]
+                else:
+                    # Try to get closest available weather
+                    closest_time = min(weather_15min.index, 
+                                     key=lambda x: abs((x - ts).total_seconds()))
+                    weather = weather_15min.loc[closest_time]
+                    if abs((closest_time - ts).total_seconds()) > 3600:  # More than 1 hour difference
+                        print(f"⚠ Using weather from {closest_time} for {ts} (forecast may be incomplete)")
+                
+                hour = ts.hour
+                dow = ts.weekday()
+                month = ts.month
+                
+                features = {
+                    "hour": hour,
+                    "day_of_week": dow,
+                    "month": month,
+                    "is_weekend": int(dow >= 5),
+                    "is_peak_hour": int((12 <= hour < 20) and dow < 5),
+                    "is_summer": int(month in [6, 7, 8]),
+                    "is_winter": int(month in [12, 1, 2]),
+                    "temperature_f": weather["temperature_f"],
+                    "apparent_temperature_f": weather["apparent_temperature_f"],
+                    "humidity_percent": weather["humidity_percent"],
+                    "wind_speed_mph": weather["wind_speed_mph"],
+                    "cloud_cover_percent": weather["cloud_cover_percent"],
+                    "temp_deviation": weather["temperature_f"] - 65,
+                    "heating_degree": max(0, 65 - weather["temperature_f"]),
+                    "cooling_degree": max(0, weather["temperature_f"] - 75),
+                    "cons_kwh_lag_24h": lag_24h
+                }
+                
+                X_row = np.array([features[col] for col in self.feature_columns]).reshape(1, -1)
+                pred = max(0.0, float(self.model.predict(X_row).item()))
+                
+                daily_usage += pred
+                daily_intervals.append({
+                    "timestamp": ts.isoformat(),
+                    "predicted_kwh": pred
+                })
+            
+            daily_predictions.append({
+                "date": current_date.isoformat(),
+                "predicted_usage": daily_usage,
+                "intervals": daily_intervals
+            })
+            
+            total_predicted_usage += daily_usage
+            current_date += timedelta(days=1)
+        
+        return {
+            "start_date": start_date.isoformat(),
+            "end_date": bill_end_date.isoformat(),
+            "total_predicted_usage": total_predicted_usage,
+            "daily_predictions": daily_predictions,
+            "days_predicted": len(daily_predictions)
+        }
 
     def save_model(self, path="electricity-tracker/public/data/ml_model.pkl"):
         joblib.dump({

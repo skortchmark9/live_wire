@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "collection_date": "2025-06-16T18:27:43.254970",
+    "source": "ConEd via Opower API"
+  },
+  "forecasts": [
+    {
+      "bill_start_date": "2025-05-22",
+      "bill_end_date": "2025-06-20",
+      "current_date": "2025-06-16",
+      "unit_of_measure": "KWH",
+      "usage_to_date": 143.0,
+      "cost_to_date": 0.0,
+      "forecasted_usage": 202.0,
+      "forecasted_cost": 0.0,
+      "typical_usage": 0.0,
+      "typical_cost": 0.0,
+      "account_id": "2180654"
+    }
+  ]
+}

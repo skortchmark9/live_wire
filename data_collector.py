@@ -187,6 +187,46 @@ async def collect_electricity_data(username: str, password: str, totp_secret: st
                 
         except Exception as e:
             print(f"Error collecting realtime data: {e}")
+        
+        # Get forecast data for billing period alignment and ConEd predictions
+        print("Collecting forecast data for billing period and ConEd predictions")
+        try:
+            forecasts = await api.async_get_forecast()
+            forecast_data = []
+            
+            for forecast in forecasts:
+                if forecast.account.meter_type.value == 'ELEC':
+                    forecast_info = {
+                        "bill_start_date": forecast.start_date.isoformat(),
+                        "bill_end_date": forecast.end_date.isoformat(),
+                        "current_date": forecast.current_date.isoformat(),
+                        "unit_of_measure": forecast.unit_of_measure.value,
+                        "usage_to_date": forecast.usage_to_date,
+                        "cost_to_date": forecast.cost_to_date,
+                        "forecasted_usage": forecast.forecasted_usage,
+                        "forecasted_cost": forecast.forecasted_cost,
+                        "typical_usage": forecast.typical_usage,
+                        "typical_cost": forecast.typical_cost,
+                        "account_id": forecast.account.utility_account_id
+                    }
+                    forecast_data.append(forecast_info)
+            
+            # Save forecast data to separate file
+            forecast_file = Path("electricity-tracker/public/data/coned_forecast.json")
+            forecast_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(forecast_file, 'w') as f:
+                json.dump({
+                    "metadata": {
+                        "collection_date": datetime.now().isoformat(),
+                        "source": "ConEd via Opower API"
+                    },
+                    "forecasts": forecast_data
+                }, f, indent=2)
+            
+            print(f"Forecast data saved to {forecast_file}")
+                
+        except Exception as e:
+            print(f"Error collecting forecast data: {e}")
             
         return all_data
 
