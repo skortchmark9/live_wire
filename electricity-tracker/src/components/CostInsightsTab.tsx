@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ComposedChart } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint, ConEdForecast } from './types'
 import { calculateCostBreakdown } from './utils'
@@ -13,6 +13,7 @@ interface CostInsightsTabProps {
   setSelectedModelDay: (day: string | null) => void
   hoveredDay: string | null
   setHoveredDay: (day: string | null) => void
+  weatherData: any[] // Add weather data to access forecast
 }
 
 export default function CostInsightsTab({
@@ -21,7 +22,8 @@ export default function CostInsightsTab({
   selectedModelDay,
   setSelectedModelDay,
   hoveredDay,
-  setHoveredDay
+  setHoveredDay,
+  weatherData
 }: CostInsightsTabProps) {
   // Memoize daily data buckets to avoid repeated filtering
   const dailyDataBuckets = useMemo(() => {
@@ -82,24 +84,145 @@ export default function CostInsightsTab({
     return last7Days
   }, [dailyDataBuckets])
 
+  const findSimilarWeatherDay = (targetTemp: number, targetHumidity?: number, dayOfWeek?: number) => {
+    // Find historical days with similar weather conditions
+    const historicalDays = Array.from(dailyDataBuckets.entries())
+      .map(([date, dayData]) => {
+        if (dayData.length === 0) return null
+        
+        const avgTemp = dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
+          .reduce((sum, d, _, arr) => sum + (d.temperature_f! / arr.length), 0)
+        
+        const avgHumidity = dayData.filter(d => d.apparent_temperature_f !== null)
+          .reduce((sum, d, _, arr) => sum + ((d.apparent_temperature_f || d.temperature_f)! / arr.length), 0)
+        
+        const totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+        const dayDate = parseISO(date)
+        
+        return {
+          date,
+          avgTemp,
+          avgHumidity,
+          totalUsage,
+          dayOfWeek: dayDate.getDay(),
+          data: dayData
+        }
+      })
+      .filter(day => day !== null && day.avgTemp > 0 && day.totalUsage > 0)
+    
+    if (historicalDays.length === 0) return null
+    
+    // Calculate similarity scores
+    const scoredDays = historicalDays.map(day => {
+      let score = 0
+      
+      // Temperature similarity (most important factor)
+      const tempDiff = Math.abs(day.avgTemp - targetTemp)
+      const tempScore = Math.max(0, 100 - (tempDiff * 2)) // Penalty of 2 points per degree difference
+      score += tempScore * 0.6 // 60% weight
+      
+      // Humidity/apparent temperature similarity
+      if (targetHumidity && day.avgHumidity) {
+        const humidityDiff = Math.abs(day.avgHumidity - targetHumidity)
+        const humidityScore = Math.max(0, 100 - (humidityDiff * 1.5))
+        score += humidityScore * 0.25 // 25% weight
+      }
+      
+      // Day of week similarity (weekday vs weekend patterns)
+      if (dayOfWeek !== undefined) {
+        const isTargetWeekend = dayOfWeek >= 5
+        const isDayWeekend = day.dayOfWeek >= 5
+        const dowScore = isTargetWeekend === isDayWeekend ? 100 : 70 // Moderate penalty for different day types
+        score += dowScore * 0.15 // 15% weight
+      }
+      
+      return {
+        ...day,
+        similarityScore: score,
+        tempDiff: tempDiff
+      }
+    })
+    
+    // Sort by similarity score and return the best match
+    const bestMatch = scoredDays.sort((a, b) => b.similarityScore - a.similarityScore)[0]
+    
+    // Only return if the match is reasonably good (temperature within 10 degrees)
+    if (bestMatch && bestMatch.tempDiff <= 10) {
+      return bestMatch
+    }
+    
+    return null
+  }
+
   const getBillingPeriodData = useMemo(() => {
     if (!conedForecast) return []
     
     const billStart = parseISO(conedForecast.bill_start_date)
+    const billEnd = parseISO(conedForecast.bill_end_date)
     const now = new Date()
     const billingPeriodDays = []
     
+    // Create weather map for easier lookup
+    const weatherMap = new Map<string, any>()
+    weatherData.forEach(weather => {
+      const dateKey = weather.timestamp.substring(0, 10) // YYYY-MM-DD
+      if (!weatherMap.has(dateKey)) {
+        weatherMap.set(dateKey, [])
+      }
+      weatherMap.get(dateKey)!.push(weather)
+    })
+    
     let currentDate = new Date(billStart)
-    while (currentDate <= now) {
+    while (currentDate <= billEnd) {
       const dateKey = format(currentDate, 'yyyy-MM-dd')
       const dayData = dailyDataBuckets.get(dateKey) || []
+      const isHistorical = currentDate <= now
+      const isToday = dateKey === format(now, 'yyyy-MM-dd')
+      const isYesterday = dateKey === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
       
-      const totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+      let totalUsage = 0
+      let avgTemp: number | null = null
+      let predictedUsage = 0
+      let similarDay: any = null
       
-      const avgTemp = dayData.length > 0 
-        ? dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
-            .reduce((sum, d, _, arr) => sum + (d.temperature_f! / arr.length), 0)
-        : null
+      if (isHistorical) {
+        // Historical data - use actual usage
+        totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+        
+        // Get temperature from actual data if available
+        if (dayData.length > 0) {
+          const temps = dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
+          avgTemp = temps.length > 0 
+            ? temps.reduce((sum, d) => sum + d.temperature_f!, 0) / temps.length
+            : null
+        }
+      } else {
+        // Future data - no usage yet, but we might have forecast weather
+        totalUsage = 0
+      }
+      
+      // Try to get temperature from weather forecast if not available from actual data
+      if (avgTemp === null) {
+        const weatherForDay = weatherMap.get(dateKey) || []
+        if (weatherForDay.length > 0) {
+          const temps = weatherForDay.filter(w => w.temperature_f !== null && w.temperature_f !== undefined)
+          avgTemp = temps.length > 0 
+            ? temps.reduce((sum, w) => sum + w.temperature_f, 0) / temps.length
+            : null
+        }
+      }
+      
+      // For future days with forecast weather, predict usage based on similar weather days
+      if (!isHistorical && avgTemp !== null) {
+        const weatherForDay = weatherMap.get(dateKey) || []
+        const avgHumidity = weatherForDay.length > 0 
+          ? weatherForDay.filter(w => w.apparent_temperature_f !== null)
+              .reduce((sum, w, _, arr) => sum + (w.apparent_temperature_f / arr.length), 0)
+          : undefined
+        
+        similarDay = findSimilarWeatherDay(avgTemp, avgHumidity, currentDate.getDay())
+        predictedUsage = similarDay ? similarDay.totalUsage : 0
+      }
       
       billingPeriodDays.push({
         date: dateKey,
@@ -107,25 +230,46 @@ export default function CostInsightsTab({
         dayOfWeek: format(currentDate, 'EEE'),
         usage: totalUsage,
         avgTemp: avgTemp,
-        isToday: dateKey === format(now, 'yyyy-MM-dd'),
-        isYesterday: dateKey === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        isToday: isToday,
+        isYesterday: isYesterday,
+        isFuture: !isHistorical,
+        isForecast: !isHistorical && avgTemp !== null, // Has forecast weather
+        predictedUsage: predictedUsage,
+        similarDay: similarDay ? {
+          date: similarDay.date,
+          similarityScore: similarDay.similarityScore,
+          tempDiff: similarDay.tempDiff
+        } : null
       })
       
       currentDate.setDate(currentDate.getDate() + 1)
     }
     
     return billingPeriodDays
-  }, [dailyDataBuckets, conedForecast])
+  }, [dailyDataBuckets, conedForecast, weatherData])
 
   const getModelDayProjection = (modelDayUsage: number) => {
     const currentBillData = getCurrentMonthData()
     const billToDateUsage = currentBillData.reduce((sum, d) => sum + d.consumption_kwh, 0)
     
-    const billEnd = parseISO(conedForecast!.bill_end_date)
-    const now = new Date()
-    const remainingDays = Math.max(0, Math.ceil((billEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+    const billingData = getBillingPeriodData
+    const futureData = billingData.filter(d => d.isFuture)
     
-    const projectedRemainingUsage = modelDayUsage * remainingDays
+    // Use weather-based predictions where available, fall back to model day usage
+    let weatherBasedProjection = 0
+    let simpleProjection = 0
+    let daysWithPrediction = 0
+    
+    futureData.forEach(day => {
+      if (day.predictedUsage > 0) {
+        weatherBasedProjection += day.predictedUsage
+        daysWithPrediction++
+      } else {
+        simpleProjection += modelDayUsage
+      }
+    })
+    
+    const projectedRemainingUsage = weatherBasedProjection + simpleProjection
     const totalProjectedUsage = billToDateUsage + projectedRemainingUsage
     
     const monthToDateCost = calculateCostBreakdown(billToDateUsage)
@@ -137,7 +281,9 @@ export default function CostInsightsTab({
       projectedRemainingUsage,
       totalProjectedUsage,
       projectedMonthlyCost,
-      remainingDays
+      remainingDays: futureData.length,
+      weatherBasedDays: daysWithPrediction,
+      simpleProjectionDays: futureData.length - daysWithPrediction
     }
   }
 
@@ -153,54 +299,157 @@ export default function CostInsightsTab({
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">Billing Period Usage & Temperature</h3>
           {(() => {
-            const billingPeriodData = getBillingPeriodData
-            console.log(billingPeriodData);
+            const billingPeriodData = getBillingPeriodData.map((x) => {
+                  return {
+                    ...x,
+                    usage: Math.round(x.usage * 100) / 100,
+                    avgTemp: x.avgTemp ? Math.round(x.avgTemp) : null,
+                  };
+            });
+            
+            const today = format(new Date(), 'yyyy-MM-dd')
+            const futureCount = billingPeriodData.filter(d => d.isFuture).length
+            const forecastCount = billingPeriodData.filter(d => d.isForecast).length
             
             return billingPeriodData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <ComposedChart data={billingPeriodData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    dataKey="displayDate" 
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
-                    fontSize={12}
-                  />
-                  <YAxis yAxisId="left" domain={[0, 'dataMax']} />
-                  <YAxis yAxisId="right" orientation="right" domain={['dataMin - 5', 'dataMax + 5']} />
-                  <Tooltip 
-                    formatter={(value: number, name: string) => [
-                      name === 'Daily Usage (kWh)' ? value.toFixed(1) : value.toFixed(0),
-                      name
-                    ]}
-                    labelFormatter={(label) => `${label}`}
-                  />
-                  <Legend />
-                  <Bar 
-                    yAxisId="left"
-                    dataKey="usage" 
-                    fill="#3b82f6"
-                    name="Daily Usage (kWh)"
-                    onClick={(data) => {
-                      if (data && !data.isToday) {
-                        setSelectedModelDay(data.date)
-                      }
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="avgTemp" 
-                    stroke="#f59e0b" 
-                    strokeWidth={2}
-                    dot={{ fill: '#f59e0b', strokeWidth: 2, r: 3 }}
-                    name="Avg Temperature (°F)"
-                    connectNulls={false}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <div>
+                <div className="text-sm text-gray-600 mb-3 flex justify-between items-center">
+                  <span>Full billing period ({billingPeriodData.length} days)</span>
+                  {futureCount > 0 && (
+                    <span className="text-xs">
+                      {forecastCount} days with weather forecast • {futureCount - forecastCount} days without forecast
+                    </span>
+                  )}
+                </div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={billingPeriodData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="displayDate" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                      fontSize={12}
+                    />
+                    <YAxis yAxisId="left" domain={[0, 'dataMax']} />
+                    <YAxis yAxisId="right" orientation="right" domain={['dataMin - 5', 'dataMax + 5']} />
+                    <Tooltip 
+                      formatter={(value: number, name: string) => [
+                        name === 'Daily Usage (kWh)' || name === 'Predicted Usage (kWh)' ? value.toFixed(1) : value.toFixed(0),
+                        name
+                      ]}
+                      labelFormatter={(label, payload) => {
+                        const data = payload?.[0]?.payload
+                        if (data) {
+                          let status = ''
+                          if (data.isFuture) {
+                            if (data.isForecast && data.similarDay) {
+                              status = ` (predicted based on ${format(parseISO(data.similarDay.date), 'MMM dd')}, ${data.similarDay.tempDiff.toFixed(1)}°F diff)`
+                            } else if (data.isForecast) {
+                              status = ' (forecast weather, no similar day found)'
+                            } else {
+                              status = ' (no forecast)'
+                            }
+                          } else if (data.isToday) {
+                            status = ' (today)'
+                          }
+                          return `${label}${status}`
+                        }
+                        return label
+                      }}
+                    />
+                    <Legend 
+                      content={() => null} // Hide the default legend
+                    />
+                    <Bar 
+                      yAxisId="left"
+                      dataKey="usage" 
+                      name="Actual Usage (kWh)"
+                      onClick={(data) => {
+                        if (data && !data.isToday && !data.isFuture) {
+                          setSelectedModelDay(data.date)
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {billingPeriodData.map((entry, index) => {
+                        let fillColor = '#3b82f6' // Blue for historical
+                        if (entry.isFuture) fillColor = 'transparent' // Transparent for future (no actual usage)
+                        if (entry.isToday) fillColor = '#22c55e' // Green for today
+                        
+                        return (
+                          <Cell key={`actual-${index}`} fill={fillColor} />
+                        )
+                      })}
+                    </Bar>
+                    <Bar 
+                      yAxisId="left"
+                      dataKey="predictedUsage" 
+                      name="Predicted Usage (kWh)"
+                      onClick={(data) => {
+                        if (data && data.similarDay) {
+                          setSelectedModelDay(data.similarDay.date)
+                        }
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {billingPeriodData.map((entry, index) => {
+                        const fillColor = 'transparent';
+                        
+                        return (
+                          <Cell
+                          key={`predicted-${index}`}
+                          fill={fillColor}
+                          stroke={'red'}
+                          strokeDasharray={fillColor !== 'transparent' ? '4 2' : undefined}
+                          />
+                        )
+                      })}
+                    </Bar>
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="avgTemp" 
+                      stroke="#f59e0b" 
+                      strokeWidth={2}
+                      dot={(props) => {
+                        const data = billingPeriodData[props.index]
+                        if (!data || data.avgTemp === null) return null
+                        
+                        if (data.isForecast) {
+                          // Dashed circle for forecast
+                          return (
+                            <circle 
+                              key={props.index}
+                              cx={props.cx} 
+                              cy={props.cy} 
+                              r={3} 
+                              fill="none" 
+                              stroke="#f59e0b" 
+                              strokeWidth={2}
+                              strokeDasharray="2 2"
+                            />
+                          )
+                        }
+                        // Solid circle for actual
+                        return (
+                          <circle 
+                            key={props.index}
+                            cx={props.cx} 
+                            cy={props.cy} 
+                            r={3} 
+                            fill="#f59e0b" 
+                            stroke="#f59e0b" 
+                            strokeWidth={2}
+                          />
+                        )
+                      }}
+                      name="Temperature (°F)"
+                      connectNulls={false}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
               <div className="text-center text-gray-500 py-8">
                 No billing period data available
@@ -349,11 +598,17 @@ export default function CostInsightsTab({
           <h3 className="text-lg font-semibold mb-2">
             Billing Period Costs
             {(() => {
-              if (selectedModelDay) {
+              const billingData = getBillingPeriodData
+              const weatherBasedDays = billingData.filter(d => d.isFuture && d.predictedUsage > 0).length
+              const totalFutureDays = billingData.filter(d => d.isFuture).length
+              
+              if (weatherBasedDays > 0) {
+                return ` (${weatherBasedDays}/${totalFutureDays} days weather-predicted)`
+              } else if (selectedModelDay) {
                 const selectedDate = parseISO(selectedModelDay)
                 return ` (based on ${format(selectedDate, 'MMM dd')})`
               } else {
-                return " (based on Yesterday)"
+                return " (based on yesterday)"
               }
             })()}
           </h3>
@@ -401,6 +656,11 @@ export default function CostInsightsTab({
                   <div className="bg-orange-50 p-2 rounded">
                     <div className="font-semibold">{projection.projectedRemainingUsage.toFixed(0)} kWh</div>
                     <div className="text-gray-600">Projected Remaining ({projection.remainingDays} days)</div>
+                    {projection.weatherBasedDays > 0 && (
+                      <div className="text-xs text-purple-600 mt-1">
+                        {projection.weatherBasedDays} days weather-based
+                      </div>
+                    )}
                   </div>
                 </div>
                 

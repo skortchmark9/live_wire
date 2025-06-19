@@ -174,6 +174,7 @@ export default function ElectricityDashboard() {
           setSelectedModelDay={setSelectedModelDay}
           hoveredDay={hoveredDay}
           setHoveredDay={setHoveredDay}
+          weatherData={weatherData}
         />
       ) : (
         <OverviewTab
