@@ -36,15 +36,17 @@ export default function ElectricityDashboard() {
     try {
       setLoading(true)
       
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+      
       const [electricityResponse, weatherResponse, predictionsResponse, forecastResponse] = await Promise.all([
-        fetch('/data/electricity_usage.json'),
-        fetch('/data/weather_data.json'),
-        fetch('/data/predictions.json').catch(() => null), // Predictions might not exist yet
-        fetch('/data/coned_forecast.json').catch(() => null) // ConEd forecast might not exist yet
+        fetch(`${API_BASE_URL}/api/electricity-usage`),
+        fetch(`${API_BASE_URL}/api/weather-data`),
+        fetch(`${API_BASE_URL}/api/predictions`).catch(() => null), // Predictions might not exist yet
+        fetch(`${API_BASE_URL}/api/coned-forecast`).catch(() => null) // ConEd forecast might not exist yet
       ])
 
       if (!electricityResponse.ok || !weatherResponse.ok) {
-        throw new Error('Failed to load data files. Run the Python scripts first to collect data.')
+        throw new Error('Failed to load data from API. Make sure the Flask backend is running.')
       }
 
       const electricityJson = await electricityResponse.json()
@@ -119,11 +121,9 @@ export default function ElectricityDashboard() {
         <h2 className="text-red-800 font-semibold mb-2">Error Loading Data</h2>
         <p className="text-red-600">{error}</p>
         <p className="text-sm text-red-500 mt-2">
-          Make sure to run the Python data collection scripts first:
+          Make sure the Flask backend is running:
           <br />
-          <code className="bg-red-100 px-1 rounded">python data_collector.py</code>
-          <br />
-          <code className="bg-red-100 px-1 rounded">python weather_collector.py</code>
+          <code className="bg-red-100 px-1 rounded">cd backend && python app.py</code>
         </p>
       </div>
     )

@@ -55,7 +55,8 @@ export default function LoadDisaggregation() {
   const loadData = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/data/electricity_usage.json')
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+      const response = await fetch(`${API_BASE_URL}/api/electricity-usage`)
       if (!response.ok) throw new Error('Failed to load electricity data')
       
       const data = await response.json()
