@@ -1,17 +1,17 @@
 {
   "metadata": {
-    "collection_date": "2025-06-18T12:55:37.700192",
+    "collection_date": "2025-06-19T14:55:15.828340",
     "source": "ConEd via Opower API"
   },
   "forecasts": [
     {
       "bill_start_date": "2025-05-22",
       "bill_end_date": "2025-06-20",
-      "current_date": "2025-06-18",
+      "current_date": "2025-06-19",
       "unit_of_measure": "KWH",
-      "usage_to_date": 155.0,
+      "usage_to_date": 159.0,
       "cost_to_date": 0.0,
-      "forecasted_usage": 187.0,
+      "forecasted_usage": 182.0,
       "forecasted_cost": 0.0,
       "typical_usage": 0.0,
       "typical_cost": 0.0,
