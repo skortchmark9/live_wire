@@ -9,6 +9,7 @@ import sys
 import os
 import asyncio
 import aiohttp
+import time
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -36,24 +37,18 @@ async def collect_electricity_data(api: Opower, elec_account, start_date: date, 
     
     print(f"Using account: {elec_account.utility_account_id}")
     
-    # Collect data in chunks (ConEd API has limits)
-    all_data = []
-    current_date = start_date
-    chunk_days = 7  # Process 1 week at a time
-    
-    while current_date < end_date:
-        chunk_end = min(current_date + timedelta(days=chunk_days), end_date)
-        
-        print(f"Collecting data from {current_date} to {chunk_end}")
-        
+    async def fetch_historical_data():
+        """Fetch historical usage data"""
         try:
+            print(f"Collecting historical data from {start_date} to {end_date}")
             usage_reads = await api.async_get_usage_reads(
                 account=elec_account,
                 aggregate_type=AggregateType.QUARTER_HOUR,
-                start_date=datetime.combine(current_date, datetime.min.time()),
-                end_date=datetime.combine(chunk_end, datetime.min.time())
+                start_date=datetime.combine(start_date, datetime.min.time()),
+                end_date=datetime.combine(end_date, datetime.min.time())
             )
             
+            historical_data = []
             for read in usage_reads:
                 data_point = {
                     "start_time": read.start_time.isoformat(),
@@ -61,29 +56,46 @@ async def collect_electricity_data(api: Opower, elec_account, start_date: date, 
                     "consumption_kwh": read.consumption,
                     "provided_cost": None  # Cost not available in usage reads
                 }
-                all_data.append(data_point)
+                historical_data.append(data_point)
+                
+            print(f"Collected {len(historical_data)} historical records")
+            return historical_data
                 
         except Exception as e:
-            print(f"Error collecting data for {current_date} to {chunk_end}: {e}")
-            
-        current_date = chunk_end
+            print(f"Error collecting historical data: {e}")
+            return []
     
-    # Also get realtime data (last ~24 hours) to ensure we have the most recent data
-    print("Collecting realtime usage data (last ~24 hours)")
-    try:
-        realtime_reads = await api.async_get_realtime_usage_reads(account=elec_account)
-        
-        for read in realtime_reads:
-            data_point = {
-                "start_time": read.start_time.isoformat(),
-                "end_time": read.end_time.isoformat(),
-                "consumption_kwh": read.consumption,
-                "provided_cost": None  # Cost not available in usage reads
-            }
-            all_data.append(data_point)
+    async def fetch_realtime_data():
+        """Fetch realtime usage data (last ~24 hours)"""
+        try:
+            print("Collecting realtime usage data (last ~24 hours)")
+            realtime_reads = await api.async_get_realtime_usage_reads(account=elec_account)
             
-    except Exception as e:
-        print(f"Error collecting realtime data: {e}")
+            realtime_data = []
+            for read in realtime_reads:
+                data_point = {
+                    "start_time": read.start_time.isoformat(),
+                    "end_time": read.end_time.isoformat(),
+                    "consumption_kwh": read.consumption,
+                    "provided_cost": None  # Cost not available in usage reads
+                }
+                realtime_data.append(data_point)
+                
+            print(f"Collected {len(realtime_data)} realtime records")
+            return realtime_data
+                
+        except Exception as e:
+            print(f"Error collecting realtime data: {e}")
+            return []
+    
+    # Collect historical and realtime data in parallel
+    historical_data, realtime_data = await asyncio.gather(
+        fetch_historical_data(),
+        fetch_realtime_data()
+    )
+    
+    # Combine all data
+    all_data = historical_data + realtime_data
     
     # Remove duplicates and sort
     seen = set()
@@ -156,18 +168,28 @@ async def collect_electricity_data_full(username: str, password: str, totp_secre
     
     print(f"Collecting electricity data from {start_date} to {end_date}")
     
+    start_time = time.time()
+    
     async with aiohttp.ClientSession() as session:
         try:
             # Initialize opower client with utility name as string
+            init_start = time.time()
             api = Opower(session, "coned", username, password, totp_secret)
+            print(f"API initialization took {time.time() - init_start:.2f}s")
             
             # Login only once
+            login_start = time.time()
             print("Logging into ConEd...")
             await api.async_login()
-            print("Login successful")
+            login_time = time.time() - login_start
+            print(f"Login successful - took {login_time:.2f}s")
             
-            # Get account info
+            # Get account info first
+            account_start = time.time()
             accounts = await api.async_get_accounts()
+            account_time = time.time() - account_start
+            print(f"Account fetch took {account_time:.2f}s")
+            
             if not accounts:
                 raise Exception("No accounts found")
             
@@ -181,18 +203,125 @@ async def collect_electricity_data_full(username: str, password: str, totp_secre
             if not elec_account:
                 raise Exception("No electricity account with 15-minute resolution found")
             
-            # Collect usage data
-            usage_data = await collect_electricity_data(api, elec_account, start_date, end_date)
+            # Now run all 3 data collection operations in parallel
+            async def fetch_historical_usage():
+                """Fetch historical usage data"""
+                try:
+                    print(f"Collecting historical data from {start_date} to {end_date}")
+                    usage_reads = await api.async_get_usage_reads(
+                        account=elec_account,
+                        aggregate_type=AggregateType.QUARTER_HOUR,
+                        start_date=datetime.combine(start_date, datetime.min.time()),
+                        end_date=datetime.combine(end_date, datetime.min.time())
+                    )
+                    
+                    historical_data = []
+                    for read in usage_reads:
+                        data_point = {
+                            "start_time": read.start_time.isoformat(),
+                            "end_time": read.end_time.isoformat(),
+                            "consumption_kwh": read.consumption,
+                            "provided_cost": None  # Cost not available in usage reads
+                        }
+                        historical_data.append(data_point)
+                        
+                    print(f"Collected {len(historical_data)} historical records")
+                    return historical_data
+                        
+                except Exception as e:
+                    print(f"Error collecting historical data: {e}")
+                    return []
+
+            async def fetch_realtime_usage():
+                """Fetch realtime usage data (last ~24 hours)"""
+                try:
+                    print("Collecting realtime usage data (last ~24 hours)")
+                    realtime_reads = await api.async_get_realtime_usage_reads(account=elec_account)
+                    
+                    realtime_data = []
+                    for read in realtime_reads:
+                        data_point = {
+                            "start_time": read.start_time.isoformat(),
+                            "end_time": read.end_time.isoformat(),
+                            "consumption_kwh": read.consumption,
+                            "provided_cost": None  # Cost not available in usage reads
+                        }
+                        realtime_data.append(data_point)
+                        
+                    print(f"Collected {len(realtime_data)} realtime records")
+                    return realtime_data
+                        
+                except Exception as e:
+                    print(f"Error collecting realtime data: {e}")
+                    return []
+
+            async def fetch_forecast_data():
+                """Fetch ConEd forecast data"""
+                try:
+                    print("Collecting forecast data for billing period and ConEd predictions")
+                    forecasts = await api.async_get_forecast()
+                    forecast_data = []
+                    
+                    for forecast in forecasts:
+                        if forecast.account.meter_type.value == 'ELEC':
+                            forecast_info = {
+                                "bill_start_date": forecast.start_date.isoformat(),
+                                "bill_end_date": forecast.end_date.isoformat(),
+                                "current_date": forecast.current_date.isoformat(),
+                                "unit_of_measure": forecast.unit_of_measure.value,
+                                "usage_to_date": forecast.usage_to_date,
+                                "cost_to_date": forecast.cost_to_date,
+                                "forecasted_usage": forecast.forecasted_usage,
+                                "forecasted_cost": forecast.forecasted_cost,
+                                "typical_usage": forecast.typical_usage,
+                                "typical_cost": forecast.typical_cost,
+                                "account_id": forecast.account.utility_account_id
+                            }
+                            forecast_data.append(forecast_info)
+                    
+                    print(f"Collected {len(forecast_data)} forecast records")
+                    return forecast_data
+                        
+                except Exception as e:
+                    print(f"Error collecting forecast data: {e}")
+                    return []
+
+            # Run all 3 data collection operations in parallel
+            collection_start = time.time()
+            print("Starting parallel data collection...")
+            historical_data, realtime_data, forecast_data = await asyncio.gather(
+                fetch_historical_usage(),
+                fetch_realtime_usage(), 
+                fetch_forecast_data()
+            )
+            collection_time = time.time() - collection_start
+            print(f"Parallel data collection took {collection_time:.2f}s")
             
-            # Collect forecast data  
-            forecast_data = await collect_coned_forecast_data(api)
+            # Combine usage data
+            usage_data = historical_data + realtime_data
+            
+            # Remove duplicates and sort
+            seen = set()
+            unique_usage_data = []
+            for item in usage_data:
+                if item['start_time'] not in seen:
+                    seen.add(item['start_time'])
+                    unique_usage_data.append(item)
+            
+            unique_usage_data.sort(key=lambda x: x['start_time'])
+            usage_data = unique_usage_data
             
             if not usage_data:
                 print("No usage data collected")
                 return {"status": "no_data", "usage_data": [], "forecast_data": []}
             
+            total_time = time.time() - start_time
             print(f"Successfully collected {len(usage_data)} usage data points")
             print(f"Successfully collected {len(forecast_data)} forecast records")
+            print(f"Total collection time: {total_time:.2f}s")
+            print(f"  - Login: {login_time:.2f}s ({login_time/total_time*100:.1f}%)")
+            print(f"  - Account fetch: {account_time:.2f}s ({account_time/total_time*100:.1f}%)")
+            print(f"  - Data collection: {collection_time:.2f}s ({collection_time/total_time*100:.1f}%)")
             
             return {
                 "status": "success",
@@ -202,7 +331,13 @@ async def collect_electricity_data_full(username: str, password: str, totp_secre
                     "collection_date": datetime.now().isoformat(),
                     "start_date": start_date.isoformat(),
                     "end_date": end_date.isoformat(),
-                    "total_records": len(usage_data)
+                    "total_records": len(usage_data),
+                    "timing": {
+                        "total_time": total_time,
+                        "login_time": login_time,
+                        "account_time": account_time,
+                        "collection_time": collection_time
+                    }
                 }
             }
             
