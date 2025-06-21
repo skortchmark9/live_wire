@@ -1,14 +1,16 @@
 import asyncio
 import json
 import os
+import uuid
 from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Optional, List, Dict
 import logging
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import uvicorn
 
 # Configure logging
@@ -37,7 +39,19 @@ data_cache = {
     "weather": {"data": None, "last_updated": None}
 }
 
-async def get_fresh_data(data_type: str) -> Optional[dict]:
+# Import auth manager
+from user import auth_manager
+
+# Request models
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class MFARequest(BaseModel):
+    session_id: str
+    mfa_code: str
+
+async def get_fresh_data(data_type: str, session: dict = None) -> Optional[dict]:
     """Get fresh data, collecting if not cached or stale"""
     global data_cache
     
@@ -59,18 +73,28 @@ async def get_fresh_data(data_type: str) -> Optional[dict]:
     
     try:
         if data_type == "electricity":
-            from data_collectors.electricity_collector import collect_electricity_data_full
-            
-            # Use hardcoded credentials for now
-            username = "samkortchmar@gmail.com"
-            password = os.getenv("CONED_PASSWORD")
-            totp_secret = "QFBUCOQ5UJWQJVF6"
-            
-            if not password:
-                logger.error("CONED_PASSWORD environment variable not set")
+            if session and session.get("access_token"):
+                # Create API instance with stored access token
+                import aiohttp
+                import sys
+                from pathlib import Path
+                
+                # Add opower to path
+                sys.path.insert(0, str(Path(__file__).parent.parent / "opower" / "src"))
+                from opower import Opower
+                from data_collectors.electricity_collector import collect_electricity_data
+                
+                async with aiohttp.ClientSession() as client_session:
+                    # Create API instance and set the access token directly
+                    api = Opower(client_session, "coned", session["username"], session["password"], None)
+                    api.access_token = session["access_token"]
+                    
+                    # Collect data using the token-authenticated API instance
+                    result = await collect_electricity_data(api)
+            else:
+                # No access token - this shouldn't happen in normal flow
+                logger.error("No access token provided for electricity data collection")
                 return None
-            
-            result = await collect_electricity_data_full(username, password, totp_secret)
             
             if result["status"] == "success":
                 logger.info(f"Electricity data collection completed: {len(result['usage_data'])} usage records, {len(result['forecast_data'])} forecast records")
@@ -190,16 +214,89 @@ async def get_predictions(limit: Optional[int] = Query(None)):
         logger.error(f"Error in get_predictions: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+@app.post("/api/auth/login")
+async def login(request: LoginRequest, response: Response):
+    """Initiate login flow and return session ID for MFA"""
+    session_id = await auth_manager.create_session(request.username, request.password)
+    
+    # Set session cookie with the session_id
+    response.set_cookie(
+        key="user_session", 
+        value=session_id,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=7200  # 2 hours
+    )
+    
+    # Start authentication in background
+    asyncio.create_task(auth_manager.authenticate_with_collector(session_id))
+    
+    return {
+        "session_id": session_id,
+        "status": "authenticating",
+        "message": "Please provide your MFA code"
+    }
+
+@app.post("/api/auth/mfa")
+async def submit_mfa(request: MFARequest):
+    """Submit MFA code for a pending session"""
+    print(request.session_id, request.mfa_code)
+    success = await auth_manager.submit_mfa(request.session_id, request.mfa_code)
+    print(auth_manager.mfa_sessions)
+    if not success:
+        raise HTTPException(status_code=400, detail="Session not found or expired")
+    
+    return {
+        "session_id": request.session_id,
+        "status": "processing",
+        "message": "MFA code received, authenticating..."
+    }
+
+@app.get("/api/auth/status/{session_id}")
+async def get_auth_status(session_id: str):
+    """Check the status of an authentication session"""
+    session = auth_manager.get_session(session_id)
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    # If successful, cache the data for future requests
+    if session["status"] == "success" and session.get("result"):
+        global data_cache
+        data_cache["electricity"] = {
+            "data": session["result"],
+            "last_updated": datetime.now()
+        }
+    
+    return {
+        "session_id": session_id,
+        "status": session["status"],
+        "error": session.get("error"),
+        "created_at": session["created_at"].isoformat()
+    }
+
 @app.get("/api/electricity-data")
 async def get_electricity_data_combined(
+    request: Request,
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     limit: Optional[int] = Query(None)
 ):
     """Get combined electricity usage and forecast data in a single request"""
     try:
-        # Get fresh data directly from collectors
-        result = await get_fresh_data("electricity")
+        # Check for session cookie
+        session_id = request.cookies.get("user_session")
+        if not session_id:
+            raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
+        
+        # Get the session
+        session = auth_manager.get_session(session_id)
+        if not session or session["status"] != "success":
+            raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+        
+        # Use session for data collection
+        result = await get_fresh_data("electricity", session=session)
         if not result:
             raise HTTPException(status_code=500, detail="Failed to collect electricity data")
         
