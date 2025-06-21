@@ -11,23 +11,13 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user has valid session cookie
-    const checkAuth = async () => {
-      // Check if user_session cookie exists
+    // Check if user has session cookie
+    const checkAuth = () => {
       const hasSessionCookie = document.cookie.includes('user_session=');
       
-      if (!hasSessionCookie) {
-        setIsAuthenticated(false);
-        router.push('/login');
-        return;
-      }
-
-      try {
-        // Try to fetch data - if it works, we're authenticated
-        await APIClient.getElectricityData();
+      if (hasSessionCookie) {
         setIsAuthenticated(true);
-      } catch (error) {
-        // If 401 or error, redirect to login
+      } else {
         setIsAuthenticated(false);
         router.push('/login');
       }

@@ -223,7 +223,7 @@ async def login(request: LoginRequest, response: Response):
     response.set_cookie(
         key="user_session", 
         value=session_id,
-        httponly=True,
+        httponly=False,  # Allow JS access for development
         secure=False,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=7200  # 2 hours
@@ -284,54 +284,48 @@ async def get_electricity_data_combined(
     limit: Optional[int] = Query(None)
 ):
     """Get combined electricity usage and forecast data in a single request"""
-    try:
-        # Check for session cookie
-        session_id = request.cookies.get("user_session")
-        if not session_id:
-            raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
-        
-        # Get the session
-        session = auth_manager.get_session(session_id)
-        if not session or session["status"] != "success":
-            raise HTTPException(status_code=401, detail="Session expired. Please login again.")
-        
-        # Use session for data collection
-        result = await get_fresh_data("electricity", session=session)
-        if not result:
-            raise HTTPException(status_code=500, detail="Failed to collect electricity data")
-        
-        usage_data = result.get('usage_data', [])
-        forecast_data = result.get('forecast_data', [])
-        
-        # Apply date filtering if provided (for usage data only)
-        if start_date or end_date:
-            filtered_data = []
-            for point in usage_data:
-                point_date = datetime.fromisoformat(point['start_time'].replace('Z', '+00:00')).date()
+    session_id = request.cookies.get("user_session")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
+    
+    # Get the session
+    session = auth_manager.get_session(session_id)
+    if not session or session["status"] != "success":
+        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+    
+    # Use session for data collection
+    result = await get_fresh_data("electricity", session=session)
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to collect electricity data")
+    
+    usage_data = result.get('usage_data', [])
+    forecast_data = result.get('forecast_data', [])
+    
+    # Apply date filtering if provided (for usage data only)
+    if start_date or end_date:
+        filtered_data = []
+        for point in usage_data:
+            point_date = datetime.fromisoformat(point['start_time'].replace('Z', '+00:00')).date()
+            
+            if start_date and point_date < datetime.fromisoformat(start_date).date():
+                continue
+            if end_date and point_date > datetime.fromisoformat(end_date).date():
+                continue
                 
-                if start_date and point_date < datetime.fromisoformat(start_date).date():
-                    continue
-                if end_date and point_date > datetime.fromisoformat(end_date).date():
-                    continue
-                    
-                filtered_data.append(point)
-            usage_data = filtered_data
-        
-        # Apply limit if provided (for usage data only)
-        if limit:
-            usage_data = usage_data[:limit]
-        
-        return {
-            "metadata": result.get('metadata', {}),
-            "usage_data": usage_data,
-            "usage_count": len(usage_data),
-            "forecast_data": forecast_data,
-            "forecast_count": len(forecast_data)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in get_electricity_data_combined: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+            filtered_data.append(point)
+        usage_data = filtered_data
+    
+    # Apply limit if provided (for usage data only)
+    if limit:
+        usage_data = usage_data[:limit]
+    
+    return {
+        "metadata": result.get('metadata', {}),
+        "usage_data": usage_data,
+        "usage_count": len(usage_data),
+        "forecast_data": forecast_data,
+        "forecast_count": len(forecast_data)
+    }
 
 
 if __name__ == "__main__":

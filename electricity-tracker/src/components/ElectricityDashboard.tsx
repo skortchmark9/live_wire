@@ -5,6 +5,9 @@ import { parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
 import OverviewTab from './OverviewTab'
 import CostInsightsTab from './CostInsightsTab'
+import { useElectricityData } from '@/hooks/useElectricityData'
+import { useWeatherData } from '@/hooks/useWeatherData'
+import { usePredictionsData } from '@/hooks/usePredictionsData'
 import { 
   ElectricityDataPoint, 
   WeatherDataPoint, 
@@ -16,59 +19,53 @@ import {
 } from './types'
 
 export default function ElectricityDashboard() {
+  // Use SWR hooks for all data fetching
+  const { data: electricityApiData, isLoading: electricityLoading, error: electricityError } = useElectricityData()
+  const { data: weatherApiData, isLoading: weatherLoading, error: weatherError } = useWeatherData()
+  const { data: predictionsApiData, isLoading: predictionsLoading, error: predictionsError } = usePredictionsData()
+  
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
   const [combinedData, setCombinedData] = useState<CombinedDataPoint[]>([])
   const [predictions, setPredictions] = useState<PredictionDataPoint[]>([])
   const [conedForecast, setConedForecast] = useState<ConEdForecast | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  // Compute overall loading and error states
+  const loading = electricityLoading || weatherLoading || predictionsLoading
+  const error = electricityError || weatherError || predictionsError
   const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
   const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
+  // Process electricity data
   useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-      
-      const [electricityResponse, weatherResponse, predictionsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/electricity-data`), // Use consolidated endpoint
-        fetch(`${API_BASE_URL}/api/weather-data`),
-        fetch(`${API_BASE_URL}/api/predictions`).catch(() => null) // Predictions might not exist yet
-      ])
-
-      if (!electricityResponse.ok || !weatherResponse.ok) {
-        throw new Error('Failed to load data from API. Make sure the Flask backend is running.')
-      }
-
-      const electricityJson = await electricityResponse.json()
-      const weatherJson = await weatherResponse.json()
-      
-      let predictionsJson = null
-      if (predictionsResponse && predictionsResponse.ok) {
-        predictionsJson = await predictionsResponse.json()
-      }
-
-      // Extract usage and forecast data from consolidated response
-      setElectricityData(electricityJson.usage_data || [])
-      setWeatherData(weatherJson.data || [])
-      setPredictions(predictionsJson?.predictions || [])
-      setConedForecast(electricityJson.forecast_data?.[0] || null) // Get first electricity forecast from consolidated response
-
-      combineData(electricityJson.usage_data || [], weatherJson.data || [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data')
-    } finally {
-      setLoading(false)
+    if (electricityApiData) {
+      setElectricityData(electricityApiData.usage_data || [])
+      setConedForecast(electricityApiData.forecast_data?.[0] || null)
     }
-  }
+  }, [electricityApiData])
+
+  // Process weather data
+  useEffect(() => {
+    if (weatherApiData) {
+      setWeatherData(weatherApiData.data || [])
+    }
+  }, [weatherApiData])
+
+  // Process predictions data
+  useEffect(() => {
+    if (predictionsApiData) {
+      setPredictions(predictionsApiData.predictions || [])
+    }
+  }, [predictionsApiData])
+
+  // Combine data when both electricity and weather are available
+  useEffect(() => {
+    if (electricityApiData && weatherApiData) {
+      combineData(electricityApiData.usage_data || [], weatherApiData.data || [])
+    }
+  }, [electricityApiData, weatherApiData])
 
   const combineData = (elecData: ElectricityDataPoint[], weatherData: WeatherDataPoint[]) => {
     const weatherMap = new Map<string, WeatherDataPoint>()
@@ -160,7 +157,7 @@ export default function ElectricityDashboard() {
       </div>
 
       {activeTab === 'disaggregation' ? (
-        <LoadDisaggregation />
+        <LoadDisaggregation electricityData={electricityData} loading={loading} />
       ) : activeTab === 'cost' ? (
         <CostInsightsTab
           combinedData={combinedData}

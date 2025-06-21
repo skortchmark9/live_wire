@@ -36,38 +36,20 @@ const APPLIANCE_SIGNATURES: ApplianceSignature[] = [
   { name: 'Lamp', watts: 2, pattern: 'manual', color: '#6b7280' }
 ]
 
-export default function LoadDisaggregation() {
-  const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
-  const [detectedUsage, setDetectedUsage] = useState<DetectedUsage[]>([])
-  const [loading, setLoading] = useState(true)
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
+interface LoadDisaggregationProps {
+  electricityData: ElectricityDataPoint[]
+  loading?: boolean
+}
 
-  useEffect(() => {
-    loadData()
-  }, [])
+export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
+  const [detectedUsage, setDetectedUsage] = useState<DetectedUsage[]>([])
+  const [selectedTimeRange, setSelectedTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
 
   useEffect(() => {
     if (electricityData.length > 0) {
       analyzeAppliances(electricityData)
     }
   }, [selectedTimeRange, electricityData])
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-      const response = await fetch(`${API_BASE_URL}/api/electricity-data`) // Use consolidated endpoint
-      if (!response.ok) throw new Error('Failed to load electricity data')
-      
-      const data = await response.json()
-      setElectricityData(data.usage_data || []) // Extract usage_data from consolidated response
-      analyzeAppliances(data.usage_data || [])
-    } catch (err) {
-      console.error('Error loading data:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const analyzeAppliances = (data: ElectricityDataPoint[]) => {
     const detected: DetectedUsage[] = []
