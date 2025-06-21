@@ -56,12 +56,12 @@ export default function LoadDisaggregation() {
     try {
       setLoading(true)
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-      const response = await fetch(`${API_BASE_URL}/api/electricity-usage`)
+      const response = await fetch(`${API_BASE_URL}/api/electricity-data`) // Use consolidated endpoint
       if (!response.ok) throw new Error('Failed to load electricity data')
       
       const data = await response.json()
-      setElectricityData(data.data || [])
-      analyzeAppliances(data.data || [])
+      setElectricityData(data.usage_data || []) // Extract usage_data from consolidated response
+      analyzeAppliances(data.usage_data || [])
     } catch (err) {
       console.error('Error loading data:', err)
     } finally {

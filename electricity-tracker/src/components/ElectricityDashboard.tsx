@@ -38,11 +38,10 @@ export default function ElectricityDashboard() {
       
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
       
-      const [electricityResponse, weatherResponse, predictionsResponse, forecastResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/electricity-usage`),
+      const [electricityResponse, weatherResponse, predictionsResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/electricity-data`), // Use consolidated endpoint
         fetch(`${API_BASE_URL}/api/weather-data`),
-        fetch(`${API_BASE_URL}/api/predictions`).catch(() => null), // Predictions might not exist yet
-        fetch(`${API_BASE_URL}/api/coned-forecast`).catch(() => null) // ConEd forecast might not exist yet
+        fetch(`${API_BASE_URL}/api/predictions`).catch(() => null) // Predictions might not exist yet
       ])
 
       if (!electricityResponse.ok || !weatherResponse.ok) {
@@ -57,17 +56,13 @@ export default function ElectricityDashboard() {
         predictionsJson = await predictionsResponse.json()
       }
 
-      let forecastJson = null
-      if (forecastResponse && forecastResponse.ok) {
-        forecastJson = await forecastResponse.json()
-      }
-
-      setElectricityData(electricityJson.data || [])
+      // Extract usage and forecast data from consolidated response
+      setElectricityData(electricityJson.usage_data || [])
       setWeatherData(weatherJson.data || [])
       setPredictions(predictionsJson?.predictions || [])
-      setConedForecast(forecastJson?.forecasts?.[0] || null) // Get first electricity forecast
+      setConedForecast(electricityJson.forecast_data?.[0] || null) // Get first electricity forecast from consolidated response
 
-      combineData(electricityJson.data || [], weatherJson.data || [])
+      combineData(electricityJson.usage_data || [], weatherJson.data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
     } finally {
