@@ -5,11 +5,5 @@ aiohttp==3.10.11
 requests==2.32.3
 pytz==2023.3
 
-# Dependencies for opower library
-aiozoneinfo>=0.1
-arrow>=1.2
-cryptography>=43.0.0
-pyotp>=2.0
-aiozoneinfo
-arrow
-cryptography
+# Install patched version of opower
+-e opower

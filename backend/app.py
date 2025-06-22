@@ -97,14 +97,14 @@ async def get_predictions(limit: Optional[int] = Query(None)):
 @app.post("/api/auth/login")
 async def login(request: LoginRequest, response: Response):
     """Initiate login flow and return session ID for MFA"""
+    logger.info(f"Login attempt for user: {request.username}")
     session_id = await auth_manager.create_session(request.username, request.password)
     
     # Set session cookie with the session_id
     response.set_cookie(
         key="user_session", 
         value=session_id,
-        httponly=False,  # Allow JS access for development
-        secure=False,  # Set to True in production with HTTPS
+        secure=True,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=7200  # 2 hours
     )
@@ -121,9 +121,7 @@ async def login(request: LoginRequest, response: Response):
 @app.post("/api/auth/mfa")
 async def submit_mfa(request: MFARequest):
     """Submit MFA code for a pending session"""
-    print(request.session_id, request.mfa_code)
     success = await auth_manager.submit_mfa(request.session_id, request.mfa_code)
-    print(auth_manager.mfa_sessions)
     if not success:
         raise HTTPException(status_code=400, detail="Session not found or expired")
     
