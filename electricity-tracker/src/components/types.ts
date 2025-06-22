@@ -8,18 +8,13 @@ export interface ElectricityDataPoint {
 export interface WeatherDataPoint {
   timestamp: string
   temperature_f: number | null
-  apparent_temperature_f: number | null
   humidity_percent: number | null
-  precipitation_inch: number | null
-  cloud_cover_percent: number | null
-  wind_speed_mph: number | null
 }
 
 export interface CombinedDataPoint {
   timestamp: string
   consumption_kwh: number
   temperature_f?: number | null
-  apparent_temperature_f?: number | null
   cost: number
   hour: number
   dayOfWeek: number

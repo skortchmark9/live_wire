@@ -429,8 +429,6 @@ export default function CostInsightsTab({
                       strokeWidth={2}
                       dot={(props: {index: number, cx: number, cy: number}) => {
                         const data = billingPeriodData[props.index]
-                        if (!data || data.avgTemp === null) return <></>   
-                        
                         if (data.isForecast) {
                           // Dashed circle for forecast
                           return (

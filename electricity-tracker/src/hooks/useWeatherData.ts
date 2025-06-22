@@ -4,9 +4,8 @@ import { swrConfig } from '@/lib/swr';
 interface WeatherData {
   data: Array<{
     timestamp: string;
-    temperature: number;
-    humidity: number;
-    // Add other weather fields as needed
+    temperature_f: number;
+    humidity_percent: number;
   }>;
   metadata: unknown;
   count: number;

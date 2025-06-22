@@ -53,12 +53,8 @@ export default function ElectricityDashboard() {
     if (weatherApiData) {
       setWeatherData((weatherApiData.data || []).map(item => ({
         timestamp: item.timestamp,
-        temperature_f: item.temperature,
-        apparent_temperature_f: null,
-        humidity_percent: item.humidity,
-        precipitation_inch: null,
-        cloud_cover_percent: null,
-        wind_speed_mph: null
+        temperature_f: item.temperature_f,
+        humidity_percent: item.humidity_percent,
       })))
     }
   }, [weatherApiData])
@@ -73,12 +69,8 @@ export default function ElectricityDashboard() {
         })), 
         (weatherApiData.data || []).map(item => ({
           timestamp: item.timestamp,
-          temperature_f: item.temperature,
-          apparent_temperature_f: null,
-          humidity_percent: item.humidity,
-          precipitation_inch: null,
-          cloud_cover_percent: null,
-          wind_speed_mph: null
+          temperature_f: item.temperature_f,
+          humidity_percent: item.humidity_percent,
         }))
       )
     }
@@ -105,7 +97,6 @@ export default function ElectricityDashboard() {
         timestamp: elec.start_time,
         consumption_kwh: elec.consumption_kwh,
         temperature_f: weather?.temperature_f,
-        apparent_temperature_f: weather?.apparent_temperature_f || weather?.temperature_f,
         cost: elec.provided_cost || 0,
         hour: startTime.getHours(),
         dayOfWeek: startTime.getDay()
