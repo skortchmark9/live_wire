@@ -19,10 +19,16 @@ import uvicorn
 from opower import Opower
 from data_collectors.electricity_collector import collect_electricity_data
 from contextlib import asynccontextmanager
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 async def periodic_weather_update():
     """Periodically update weather data"""
@@ -49,6 +55,10 @@ async def lifespan(app: FastAPI):
         pass
 
 app = FastAPI(title="Live Wire API", version="1.0.0", lifespan=lifespan)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(
@@ -95,6 +105,7 @@ async def get_predictions(limit: Optional[int] = Query(None)):
     raise HTTPException(status_code=501, detail="Predictions endpoint not yet implemented")
 
 @app.post("/api/auth/login")
+@limiter.limit("5/minute")
 async def login(request: LoginRequest, response: Response):
     """Initiate login flow and return session ID for MFA"""
     logger.info(f"Login attempt for user: {request.username}")
@@ -119,6 +130,7 @@ async def login(request: LoginRequest, response: Response):
     }
 
 @app.post("/api/auth/mfa")
+@limiter.limit("10/minute")
 async def submit_mfa(request: MFARequest):
     """Submit MFA code for a pending session"""
     success = await auth_manager.submit_mfa(request.session_id, request.mfa_code)
