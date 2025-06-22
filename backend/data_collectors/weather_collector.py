@@ -130,7 +130,7 @@ def get_current_and_forecast_weather(latitude: float = 40.7589, longitude: float
         "precipitation_unit": "inch",
         "timezone": "America/New_York",
         "past_days": 7,  # Include last 7 days
-        "forecast_days": 7  # Include next 7 days
+        "forecast_days": 30  # Include next 7 days
     }
     
     try:

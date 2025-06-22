@@ -1,3 +1,7 @@
+import aiohttp
+import sys
+from pathlib import Path
+from user import auth_manager
 import asyncio
 import json
 import os
@@ -35,12 +39,8 @@ DATA_DIR = Path(__file__).parent.parent / "electricity-tracker" / "public" / "da
 
 # In-memory cache for collected data
 data_cache = {
-    "electricity": {"data": None, "last_updated": None},
     "weather": {"data": None, "last_updated": None}
 }
-
-# Import auth manager
-from user import auth_manager
 
 # Request models
 class LoginRequest(BaseModel):
@@ -55,9 +55,7 @@ async def get_fresh_data(data_type: str, session: dict = None) -> Optional[dict]
     """Get fresh data, collecting if not cached or stale"""
     global data_cache
     
-    if data_type == "electricity":
-        max_age_hours = 2  # Electricity data cache for 2 hours to avoid multiple logins
-    elif data_type == "weather":
+    if data_type == "weather":
         max_age_hours = 6  # Weather data can be older (6 hours)
     else:
         return None
@@ -72,42 +70,7 @@ async def get_fresh_data(data_type: str, session: dict = None) -> Optional[dict]
     logger.info(f"Collecting fresh {data_type} data...")
     
     try:
-        if data_type == "electricity":
-            if session and session.get("access_token"):
-                # Create API instance with stored access token
-                import aiohttp
-                import sys
-                from pathlib import Path
-                
-                # Add opower to path
-                sys.path.insert(0, str(Path(__file__).parent.parent / "opower" / "src"))
-                from opower import Opower
-                from data_collectors.electricity_collector import collect_electricity_data
-                
-                async with aiohttp.ClientSession() as client_session:
-                    # Create API instance and set the access token directly
-                    api = Opower(client_session, "coned", session["username"], session["password"], None)
-                    api.access_token = session["access_token"]
-                    
-                    # Collect data using the token-authenticated API instance
-                    result = await collect_electricity_data(api)
-            else:
-                # No access token - this shouldn't happen in normal flow
-                logger.error("No access token provided for electricity data collection")
-                return None
-            
-            if result["status"] == "success":
-                logger.info(f"Electricity data collection completed: {len(result['usage_data'])} usage records, {len(result['forecast_data'])} forecast records")
-                data_cache[data_type] = {
-                    "data": result,
-                    "last_updated": datetime.now()
-                }
-                return result
-            else:
-                logger.error(f"Electricity data collection failed: {result.get('error', 'Unknown error')}")
-                return None
-                
-        elif data_type == "weather":
+        if data_type == "weather":
             from data_collectors.weather_collector import collect_weather_data_full
             
             result = collect_weather_data_full()
@@ -261,14 +224,6 @@ async def get_auth_status(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or expired")
     
-    # If successful, cache the data for future requests
-    if session["status"] == "success" and session.get("result"):
-        global data_cache
-        data_cache["electricity"] = {
-            "data": session["result"],
-            "last_updated": datetime.now()
-        }
-    
     return {
         "session_id": session_id,
         "status": session["status"],
@@ -292,9 +247,22 @@ async def get_electricity_data_combined(
     session = auth_manager.get_session(session_id)
     if not session or session["status"] != "success":
         raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+    if not session.get('access_token'):
+        raise HTTPException(status_code=401, detail="No access token.")
     
-    # Use session for data collection
-    result = await get_fresh_data("electricity", session=session)
+    # Add opower to path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "opower" / "src"))
+    from opower import Opower
+    from data_collectors.electricity_collector import collect_electricity_data
+
+    async with aiohttp.ClientSession() as client_session:
+        # Create API instance and set the access token directly
+        api = Opower(client_session, "coned", session["username"], session["password"], None)
+        api.access_token = session["access_token"]
+        
+        # Collect data using the token-authenticated API instance
+        result = await collect_electricity_data(api)
+    
     if not result:
         raise HTTPException(status_code=500, detail="Failed to collect electricity data")
     
