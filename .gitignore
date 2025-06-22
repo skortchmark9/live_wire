@@ -1,4 +1,3 @@
 venv
-opower
 **/*.pyc
 __pycache__
