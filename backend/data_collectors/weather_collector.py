@@ -129,8 +129,8 @@ def get_current_and_forecast_weather(latitude: float = 40.7589, longitude: float
         "wind_speed_unit": "mph",
         "precipitation_unit": "inch",
         "timezone": "America/New_York",
-        "past_days": 7,  # Include last 7 days
-        "forecast_days": 30  # Include next 7 days
+        "past_days": 7, 
+        "forecast_days": 16 
     }
     
     try:
@@ -205,49 +205,43 @@ def collect_weather_data_full() -> Dict:
     print(f"  Recent historical: {start_date} to {historical_end_date}")
     print(f"  Current + Forecast: last 7 days + next 7 days")
     
-    try:
-        # Get recent historical weather data
-        historical_data = []
-        if historical_end_date >= start_date:
-            historical_data = get_historical_weather(start_date, historical_end_date)
-            print(f"Collected {len(historical_data)} historical weather points")
-        
-        # Get current and forecast weather data (last 7 days + next 7 days)
-        current_forecast_data = get_current_and_forecast_weather()
-        print(f"Collected {len(current_forecast_data)} current/forecast weather points")
-        
-        # Merge the data
-        all_weather_data = merge_weather_data(historical_data, current_forecast_data)
-        
-        # Calculate actual date range from merged data
-        if all_weather_data:
-            actual_start = min(item['timestamp'] for item in all_weather_data)[:10]  # YYYY-MM-DD
-            actual_end = max(item['timestamp'] for item in all_weather_data)[:10]    # YYYY-MM-DD
-        else:
-            actual_start = start_date.isoformat()
-            actual_end = date.today().isoformat()
-        
-        print(f"\nSuccessfully collected {len(all_weather_data)} total weather data points")
-        print(f"Date range: {actual_start} to {actual_end}")
-        
-        return {
-            "status": "success",
-            "weather_data": all_weather_data,
-            "metadata": {
-                "collection_date": datetime.now().isoformat(),
-                "start_date": actual_start,
-                "end_date": actual_end,
-                "total_records": len(all_weather_data),
-                "location": "NYC (Central Park)",
-                "sources": [
-                    "Open-Meteo Archive API (historical)",
-                    "Open-Meteo Forecast API (current + forecast)"
-                ],
-                "includes_forecast": True,
-                "forecast_days": 7
-            }
+    # Get recent historical weather data
+    historical_data = []
+    if historical_end_date >= start_date:
+        historical_data = get_historical_weather(start_date, historical_end_date)
+        print(f"Collected {len(historical_data)} historical weather points")
+    
+    # Get current and forecast weather data (last 7 days + next 7 days)
+    current_forecast_data = get_current_and_forecast_weather()
+    print(f"Collected {len(current_forecast_data)} current/forecast weather points")
+    
+    # Merge the data
+    all_weather_data = merge_weather_data(historical_data, current_forecast_data)
+    
+    # Calculate actual date range from merged data
+    if all_weather_data:
+        actual_start = min(item['timestamp'] for item in all_weather_data)[:10]  # YYYY-MM-DD
+        actual_end = max(item['timestamp'] for item in all_weather_data)[:10]    # YYYY-MM-DD
+    else:
+        actual_start = start_date.isoformat()
+        actual_end = date.today().isoformat()
+    
+    print(f"\nSuccessfully collected {len(all_weather_data)} total weather data points")
+    print(f"Date range: {actual_start} to {actual_end}")
+    
+    return {
+        "data": all_weather_data,
+        "metadata": {
+            "collection_date": datetime.now().isoformat(),
+            "start_date": actual_start,
+            "end_date": actual_end,
+            "total_records": len(all_weather_data),
+            "location": "NYC (Central Park)",
+            "sources": [
+                "Open-Meteo Archive API (historical)",
+                "Open-Meteo Forecast API (current + forecast)"
+            ],
+            "includes_forecast": True,
+            "forecast_days": 7
         }
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        return {"status": "error", "error": str(e), "weather_data": []}
+    }

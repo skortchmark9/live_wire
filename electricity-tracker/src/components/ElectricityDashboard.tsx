@@ -22,7 +22,6 @@ export default function ElectricityDashboard() {
   // Use SWR hooks for all data fetching
   const { data: electricityApiData, isLoading: electricityLoading, error: electricityError } = useElectricityData()
   const { data: weatherApiData, isLoading: weatherLoading, error: weatherError } = useWeatherData()
-  const { data: predictionsApiData, isLoading: predictionsLoading, error: predictionsError } = usePredictionsData()
   
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
@@ -31,8 +30,8 @@ export default function ElectricityDashboard() {
   const [conedForecast, setConedForecast] = useState<ConEdForecast | null>(null)
   
   // Compute overall loading and error states
-  const loading = electricityLoading || weatherLoading || predictionsLoading
-  const error = electricityError || weatherError || predictionsError
+  const loading = electricityLoading || weatherLoading
+  const error = electricityError || weatherError
   const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
   const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
@@ -52,13 +51,6 @@ export default function ElectricityDashboard() {
       setWeatherData(weatherApiData.data || [])
     }
   }, [weatherApiData])
-
-  // Process predictions data
-  useEffect(() => {
-    if (predictionsApiData) {
-      setPredictions(predictionsApiData.predictions || [])
-    }
-  }, [predictionsApiData])
 
   // Combine data when both electricity and weather are available
   useEffect(() => {
@@ -171,7 +163,7 @@ export default function ElectricityDashboard() {
       ) : (
         <OverviewTab
           combinedData={combinedData}
-          predictions={predictions}
+          predictions={[]}
           timeRange={timeRange}
           setTimeRange={setTimeRange}
         />

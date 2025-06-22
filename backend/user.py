@@ -1,6 +1,10 @@
 """
 User authentication module for ConEd login with MFA support
 """
+import aiohttp
+import sys
+from pathlib import Path
+from opower import Opower
 import asyncio
 import uuid
 from datetime import datetime, timedelta
@@ -114,13 +118,6 @@ class AuthenticationManager:
             await self.update_session_status(session_id, "authenticating")
             
             # Import here to avoid circular imports
-            import aiohttp
-            import sys
-            from pathlib import Path
-            
-            # Add opower to path
-            sys.path.insert(0, str(Path(__file__).parent.parent / "opower" / "src"))
-            from opower import Opower
             
             # Create MFA callback that waits for the code
             async def mfa_callback():
