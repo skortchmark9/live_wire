@@ -1,0 +1,15 @@
+# Ignore files that shouldn't trigger rebuilds
+.next/
+node_modules/
+.git/
+*.log
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Don't include test files in deployment
+**/*.test.*
+**/*.spec.*
+__tests__/

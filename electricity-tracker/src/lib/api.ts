@@ -1,4 +1,17 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Ensure the API URL has the correct protocol
+const getApiBaseUrl = () => {
+  const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  
+  // If the URL doesn't start with http:// or https://, use current protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+    return `${protocol}//${url}`;
+  }
+  
+  return url;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface LoginResponse {
   session_id: string;
