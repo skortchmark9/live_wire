@@ -57,11 +57,12 @@ export default function CostInsightsTab({
     })
   }
 
-  const getLast7DaysData = useMemo(() => {
+  const getLastMonthData = useMemo(() => {
     const now = new Date()
-    const last7Days = []
+    const lastMonth = []
     
-    for (let i = 6; i >= 0; i--) {
+    // Get last 30 days, but build array from oldest to newest so today is on the right
+    for (let i = 29; i >= 0; i--) {
       const date = new Date(now)
       date.setDate(date.getDate() - i)
       const dateKey = format(date, 'yyyy-MM-dd')
@@ -76,19 +77,22 @@ export default function CostInsightsTab({
             .reduce((sum, d, _, arr) => sum + (d.temperature_f! / arr.length), 0)
         : null
       
-      last7Days.push({
-        date: dateKey,
-        displayDate: format(date, 'MMM dd'),
-        dayOfWeek: format(date, 'EEE'),
-        usage: totalUsage,
-        cost: totalCost,
-        avgTemp: avgTemp,
-        isToday: dateKey === format(now, 'yyyy-MM-dd'),
-        isYesterday: dateKey === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
-      })
+      // Only include days with data
+      if (totalUsage > 0) {
+        lastMonth.push({
+          date: dateKey,
+          displayDate: format(date, 'MMM dd'),
+          dayOfWeek: format(date, 'EEE'),
+          usage: totalUsage,
+          cost: totalCost,
+          avgTemp: avgTemp,
+          isToday: dateKey === format(now, 'yyyy-MM-dd'),
+          isYesterday: dateKey === format(new Date(now.getTime() - 24 * 60 * 60 * 1000), 'yyyy-MM-dd')
+        })
+      }
     }
     
-    return last7Days
+    return lastMonth
   }, [dailyDataBuckets])
 
   const findSimilarWeatherDay = (targetTemp: number, targetHumidity?: number, dayOfWeek?: number) => {
@@ -346,7 +350,7 @@ export default function CostInsightsTab({
                   <span>Full billing period ({billingPeriodData.length} days)</span>
                   {futureCount > 0 && (
                     <span className="text-xs">
-                      {forecastCount} days with weather forecast • {futureCount - forecastCount} days without forecast
+                      {forecastCount} days with weather forecast • {futureCount - forecastCount} based on {selectedModelDay}
                     </span>
                   )}
                 </div>
@@ -397,7 +401,7 @@ export default function CostInsightsTab({
                       dataKey="usage" 
                       name="Actual Usage (kWh)"
                       onClick={(data) => {
-                        if (data && !data.isToday && !data.isFuture) {
+                        if (data && !data.isFuture) {
                           setSelectedModelDay(data.date)
                         }
                       }}
@@ -512,37 +516,41 @@ export default function CostInsightsTab({
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Daily Usage & Cost Insights - Last 7 Days</h3>
+          <h3 className="text-lg font-semibold mb-4">Select a Model Day</h3>
+          <p className="text-sm text-gray-600 mb-4">Choose a day from the past month to use as the basis for projecting future usage</p>
           {(() => {
-            const last7DaysData = getLast7DaysData
+            const lastMonthData = getLastMonthData
             
             return (
-              <div className="grid grid-cols-7 gap-2">
-                {last7DaysData.map((day) => (
-                  <button
-                    key={day.date}
-                    onClick={() => !day.isToday && setSelectedModelDay(day.date)}
-                    onMouseEnter={() => setHoveredDay(day.date)}
-                    onMouseLeave={() => setHoveredDay(null)}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    } ${day.isToday ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}
-                  >
-                    <div className="text-center">
-                      <div className="text-xs font-medium text-gray-600">{day.dayOfWeek}</div>
-                      <div className="text-sm font-semibold">{day.displayDate}</div>
-                      <div className="text-lg font-bold text-green-600 mt-1">{day.usage.toFixed(1)}</div>
-                      <div className="text-xs text-gray-500">kWh</div>
-                      <div className="text-sm font-semibold text-blue-600">${day.cost.toFixed(2)}</div>
-                      {day.avgTemp !== null && (
-                        <div className="text-xs text-orange-600 font-medium">{day.avgTemp.toFixed(0)}°F</div>
-                      )}
-                      {day.isToday && <div className="text-xs text-gray-400 mt-1">Today</div>}
-                    </div>
-                  </button>
-                ))}
+              <div className="overflow-x-auto">
+                <div className="flex gap-2 pb-2">
+                  {lastMonthData.map((day) => (
+                    <button
+                      key={day.date}
+                      onClick={() => setSelectedModelDay(day.date)}
+                      onMouseEnter={() => setHoveredDay(day.date)}
+                      onMouseLeave={() => setHoveredDay(null)}
+                      className={`flex-shrink-0 p-4 rounded-lg border-2 transition-all ${
+                        selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                      style={{ minWidth: '130px', cursor: 'pointer' }}
+                    >
+                      <div className="text-center">
+                        <div className="text-xs font-medium text-gray-600">{day.dayOfWeek}</div>
+                        <div className="text-sm font-semibold">{day.displayDate}</div>
+                        <div className="text-lg font-bold text-green-600 mt-1">{day.usage.toFixed(1)}</div>
+                        <div className="text-xs text-gray-500">kWh</div>
+                        <div className="text-sm font-semibold text-blue-600">${day.cost.toFixed(2)}</div>
+                        {day.avgTemp !== null && (
+                          <div className="text-xs text-orange-600 font-medium">{day.avgTemp.toFixed(0)}°F</div>
+                        )}
+                        {day.isToday && <div className="text-xs text-gray-400 mt-1">Today</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )
           })()}
@@ -650,20 +658,6 @@ export default function CostInsightsTab({
         <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-2">
             Billing Period Costs
-            {(() => {
-              const billingData = getBillingPeriodData
-              const weatherBasedDays = billingData.filter(d => d.isFuture && d.predictedUsage > 0).length
-              const totalFutureDays = billingData.filter(d => d.isFuture).length
-              
-              if (weatherBasedDays > 0) {
-                return ` (${weatherBasedDays}/${totalFutureDays} days weather-predicted)`
-              } else if (selectedModelDay) {
-                const selectedDate = parseISO(selectedModelDay)
-                return ` (based on ${format(selectedDate, 'MMM dd')})`
-              } else {
-                return " (based on yesterday)"
-              }
-            })()}
           </h3>
           {conedForecast && (
             <div className="text-sm text-gray-600 mb-4">
