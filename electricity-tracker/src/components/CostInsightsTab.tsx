@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint, ConEdForecast } from './types'
-import { calculateCostBreakdown } from './utils'
+import { calculateCostBreakdown } from '@/utils/costCalculations'
 
 interface CostInsightsTabProps {
   combinedData: CombinedDataPoint[]

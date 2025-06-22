@@ -1,8 +1,23 @@
-import { CostBreakdown } from './types'
+interface CostBreakdownItem {
+  tier: string
+  usage?: number | null
+  rate?: number | null
+  cost: number
+  description: string
+}
+
+export interface CostBreakdown {
+  variableBreakdown: CostBreakdownItem[]
+  fixedBreakdown: CostBreakdownItem[]
+  variableCost: number
+  fixedCost: number
+  totalDailyCost: number
+  projectedMonthlyCost: number
+}
 
 export function calculateCostBreakdown(usage: number): CostBreakdown {
-  const variableBreakdown = []
-  const fixedBreakdown = []
+  const variableBreakdown: CostBreakdownItem[] = []
+  const fixedBreakdown: CostBreakdownItem[] = []
   let variableCost = 0
   let fixedCost = 0
   
@@ -101,4 +116,8 @@ export function calculateCostBreakdown(usage: number): CostBreakdown {
     totalDailyCost: variableCost + (fixedCost / 30), // Daily portion of fixed costs
     projectedMonthlyCost: (variableCost * 30) + fixedCost
   }
+}
+
+export function calculateUsageCost(kwh: number): number {
+  return calculateCostBreakdown(kwh).variableCost
 }

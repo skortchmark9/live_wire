@@ -32,6 +32,16 @@ export const fetcher = async (path: string) => {
   });
 
   if (!response.ok) {
+    // Handle 401 authentication errors by redirecting to login
+    if (response.status === 401) {
+      // Clear session cookie
+      if (typeof document !== 'undefined') {
+        document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        window.location.href = '/login';
+      }
+      return; // Don't throw error, just redirect
+    }
+    
     const info = await response.json().catch(() => ({}));
     throw new FetchError(`Error fetching ${path}`, response.status, info);
   }
@@ -51,6 +61,16 @@ export const postFetcher = async (path: string, data: unknown) => {
   });
 
   if (!response.ok) {
+    // Handle 401 authentication errors by redirecting to login
+    if (response.status === 401) {
+      // Clear session cookie
+      if (typeof document !== 'undefined') {
+        document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        window.location.href = '/login';
+      }
+      return; // Don't throw error, just redirect
+    }
+    
     const info = await response.json().catch(() => ({}));
     throw new FetchError(`Error posting to ${path}`, response.status, info);
   }

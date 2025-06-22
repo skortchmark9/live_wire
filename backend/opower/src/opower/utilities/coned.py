@@ -106,14 +106,11 @@ class ConEd(UtilityBase):
                                 "Either TOTP secret or MFA callback is required for MFA accounts"
                             )
 
-                        print('Using MFA code:', mfaCode)
-                        print(type(mfaCode))
                         payload = {
                             "MFACode": mfaCode,
                             "ReturnUrl": RETURN_URL,
                             "OpenIdRelayState": "",
                         }
-                        print(payload)
                         async with session.post(
                             login_base + "/VerifyFactor",
                             headers=login_headers,
@@ -121,7 +118,6 @@ class ConEd(UtilityBase):
                             raise_for_status=True,
                         ) as resp:
                             mfaResult = await resp.json()
-                            print(mfaResult)
                             if not mfaResult["code"]:
                                 raise InvalidAuth(
                                     "2FA code was invalid. Is the secret wrong?"
@@ -149,5 +145,4 @@ class ConEd(UtilityBase):
             raise_for_status=True,
         ) as resp:
             out = str(await resp.json())
-            print(out)
             return out
