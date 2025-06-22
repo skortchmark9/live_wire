@@ -98,8 +98,8 @@ export default function CostInsightsTab({
         const avgTemp = dayData.filter(d => d.temperature_f !== null && d.temperature_f !== undefined)
           .reduce((sum, d, _, arr) => sum + (d.temperature_f! / arr.length), 0)
         
-        const avgHumidity = dayData.filter(d => d.apparent_temperature_f !== null)
-          .reduce((sum, d, _, arr) => sum + ((d.apparent_temperature_f || d.temperature_f)! / arr.length), 0)
+        const avgHumidity = dayData.filter(d => d.temperature_f !== null)
+          .reduce((sum, d, _, arr) => sum + ((d.temperature_f)! / arr.length), 0)
         
         const totalUsage = dayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
         const dayDate = parseISO(date)
