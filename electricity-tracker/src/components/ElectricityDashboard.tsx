@@ -14,7 +14,6 @@ import {
   CombinedDataPoint, 
   // PredictionDataPoint, // unused type 
   ConEdForecast,
-  TimeRange,
   ActiveTab 
 } from './types'
 
@@ -32,7 +31,6 @@ export default function ElectricityDashboard() {
   // Compute overall loading and error states
   const loading = electricityLoading || weatherLoading
   const error = electricityError || weatherError
-  const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const [activeTab, setActiveTab] = useState<ActiveTab>('cost')
   const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)

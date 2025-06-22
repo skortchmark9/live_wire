@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { useWeatherData } from '@/hooks/useWeatherData'
@@ -39,13 +39,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
   const [selectedTimeRange, setSelectedTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
 
-  useEffect(() => {
-    if (electricityData.length > 0 && weatherData) {
-      analyzeACUsage(electricityData, weatherData.data)
-    }
-  }, [selectedTimeRange, electricityData, weatherData])
-
-  const analyzeACUsage = (data: ElectricityDataPoint[], weather: WeatherDataPoint[]) => {
+  const analyzeACUsage = useCallback((data: ElectricityDataPoint[], weather: WeatherDataPoint[]) => {
     const acUsage: ACUsage[] = []
     const now = new Date()
     const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
@@ -83,35 +77,13 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     // Detect AC usage
     detectACUsage(recentData, weatherMap, baselineWatts, acUsage)
     setDetectedAC(acUsage)
-  }
+  }, [selectedTimeRange])
 
-  const getTemperatureForTimestamp = (timestamp: string, weatherMap: Map<string, number>): number | undefined => {
-    // Try exact match first
-    let temp = weatherMap.get(timestamp)
-    if (temp) return temp
-    
-    // Try rounded timestamp
-    const roundedTime = new Date(timestamp)
-    roundedTime.setMinutes(Math.floor(roundedTime.getMinutes() / 15) * 15, 0, 0)
-    temp = weatherMap.get(roundedTime.toISOString())
-    if (temp) return temp
-    
-    // Try finding closest timestamp within 1 hour
-    const targetTime = new Date(timestamp).getTime()
-    let closestTemp: number | undefined
-    let minDiff = Infinity
-    
-    for (const [weatherTimestamp, temperature] of weatherMap.entries()) {
-      const weatherTime = new Date(weatherTimestamp).getTime()
-      const diff = Math.abs(targetTime - weatherTime)
-      if (diff < minDiff && diff < 60 * 60 * 1000) { // Within 1 hour
-        minDiff = diff
-        closestTemp = temperature
-      }
+  useEffect(() => {
+    if (electricityData.length > 0 && weatherData) {
+      analyzeACUsage(electricityData, weatherData.data)
     }
-    
-    return closestTemp
-  }
+  }, [selectedTimeRange, electricityData, weatherData, analyzeACUsage])
 
   const detectACUsage = (
     data: Array<{timestamp: string, watts: number}>, 
@@ -203,34 +175,6 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       weatherLookup.sort((a, b) => a.timestamp - b.timestamp)
     }
 
-    // Optimized temperature lookup function
-    const getTemperature = (timestamp: string): number | undefined => {
-      const targetTime = new Date(timestamp).getTime()
-      
-      // Binary search for closest temperature within 1 hour
-      let left = 0
-      let right = weatherLookup.length - 1
-      let bestMatch: {timestamp: number, temperature: number} | null = null
-      let minDiff = Infinity
-      
-      while (left <= right) {
-        const mid = Math.floor((left + right) / 2)
-        const diff = Math.abs(weatherLookup[mid].timestamp - targetTime)
-        
-        if (diff < minDiff && diff < 60 * 60 * 1000) { // Within 1 hour
-          minDiff = diff
-          bestMatch = weatherLookup[mid]
-        }
-        
-        if (weatherLookup[mid].timestamp < targetTime) {
-          left = mid + 1
-        } else {
-          right = mid - 1
-        }
-      }
-      
-      return bestMatch?.temperature
-    }
 
     // Create a set of AC usage timestamps for faster lookup
     const acTimestamps = new Set<number>()

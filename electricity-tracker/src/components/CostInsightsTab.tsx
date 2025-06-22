@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint, ConEdForecast } from './types'
@@ -45,7 +45,7 @@ export default function CostInsightsTab({
     return buckets
   }, [combinedData])
 
-  const getCurrentMonthData = () => {
+  const getCurrentMonthData = useCallback(() => {
     if (!conedForecast) return []
     
     const billStart = parseISO(conedForecast.bill_start_date)
@@ -55,7 +55,7 @@ export default function CostInsightsTab({
       const dataDate = new Date(d.timestamp)
       return dataDate >= billStart && dataDate <= now
     })
-  }
+  }, [conedForecast, combinedData])
 
   const getLastMonthData = useMemo(() => {
     const now = new Date()
@@ -95,7 +95,7 @@ export default function CostInsightsTab({
     return lastMonth
   }, [dailyDataBuckets])
 
-  const findSimilarWeatherDay = (targetTemp: number, targetHumidity?: number, dayOfWeek?: number) => {
+  const findSimilarWeatherDay = useCallback((targetTemp: number, targetHumidity?: number, dayOfWeek?: number) => {
     // Find historical days with similar weather conditions
     const historicalDays = Array.from(dailyDataBuckets.entries())
       .map(([date, dayData]) => {
@@ -163,7 +163,7 @@ export default function CostInsightsTab({
     }
     
     return null
-  }
+  }, [dailyDataBuckets])
 
   // Get the model day usage for predictions
   const getModelDayUsage = useMemo(() => {
@@ -289,7 +289,7 @@ export default function CostInsightsTab({
     }
     
     return billingPeriodDays
-  }, [dailyDataBuckets, conedForecast, weatherData, getModelDayUsage])
+  }, [dailyDataBuckets, conedForecast, weatherData, getModelDayUsage, findSimilarWeatherDay])
 
   const getModelDayProjection = useMemo(() => {
     const currentBillData = getCurrentMonthData()
@@ -471,7 +471,7 @@ export default function CostInsightsTab({
                         const data = billingPeriodData[props.index]
                         // Don't render dot if no temperature data
                         if (data.avgTemp === null) {
-                          return null
+                          return <></>
                         }
                         if (data.isForecast) {
                           // Dashed circle for forecast
