@@ -46,7 +46,9 @@ export default function CostInsightsTab({
   }, [combinedData])
 
   const getCurrentMonthData = () => {
-    const billStart = parseISO(conedForecast!.bill_start_date)
+    if (!conedForecast) return []
+    
+    const billStart = parseISO(conedForecast.bill_start_date)
     const now = new Date()
     
     return combinedData.filter(d => {
@@ -159,6 +161,22 @@ export default function CostInsightsTab({
     return null
   }
 
+  // Get the model day usage for predictions
+  const getModelDayUsage = useMemo(() => {
+    if (selectedModelDay) {
+      const selectedDayData = dailyDataBuckets.get(selectedModelDay) || []
+      return selectedDayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+    } else {
+      // Use yesterday as default
+      const now = new Date()
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayKey = format(yesterday, 'yyyy-MM-dd')
+      const yesterdayData = dailyDataBuckets.get(yesterdayKey) || []
+      return yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
+    }
+  }, [selectedModelDay, dailyDataBuckets])
+
   const getBillingPeriodData = useMemo(() => {
     if (!conedForecast) return []
     
@@ -227,16 +245,22 @@ export default function CostInsightsTab({
         }
       }
       
-      // For future days with forecast weather, predict usage based on similar weather days
-      if (!isHistorical && avgTemp !== null) {
-        const weatherForDay = weatherMap.get(dateKey) || []
-        const avgHumidity = weatherForDay.length > 0 
-          ? weatherForDay.filter(w => w.relative_humidity_2m !== null)
-              .reduce((sum, w, _, arr) => sum + (w.relative_humidity_2m / arr.length), 0)
-          : undefined
-        
-        similarDay = findSimilarWeatherDay(avgTemp, avgHumidity, currentDate.getDay())
-        predictedUsage = similarDay ? similarDay.totalUsage : 0
+      // For future days, always predict usage
+      if (!isHistorical) {
+        if (avgTemp !== null) {
+          // We have weather forecast, use it to find similar days
+          const weatherForDay = weatherMap.get(dateKey) || []
+          const avgHumidity = weatherForDay.length > 0 
+            ? weatherForDay.filter(w => w.relative_humidity_2m !== null)
+                .reduce((sum, w, _, arr) => sum + (w.relative_humidity_2m / arr.length), 0)
+            : undefined
+          
+          similarDay = findSimilarWeatherDay(avgTemp, avgHumidity, currentDate.getDay())
+          predictedUsage = similarDay ? similarDay.totalUsage : getModelDayUsage
+        } else {
+          // No weather data, use model day usage
+          predictedUsage = getModelDayUsage
+        }
       }
       
       billingPeriodDays.push({
@@ -261,31 +285,21 @@ export default function CostInsightsTab({
     }
     
     return billingPeriodDays
-  }, [dailyDataBuckets, conedForecast, weatherData])
+  }, [dailyDataBuckets, conedForecast, weatherData, getModelDayUsage])
 
-  const getModelDayProjection = (modelDayUsage: number) => {
+  const getModelDayProjection = useMemo(() => {
     const currentBillData = getCurrentMonthData()
     const billToDateUsage = currentBillData.reduce((sum, d) => sum + d.consumption_kwh, 0)
     
     const billingData = getBillingPeriodData
     const futureData = billingData.filter(d => d.isFuture)
     
-    // Use weather-based predictions where available, fall back to model day usage
-    let weatherBasedProjection = 0
-    let simpleProjection = 0
-    let daysWithPrediction = 0
-    
-    futureData.forEach(day => {
-      if (day.predictedUsage > 0) {
-        weatherBasedProjection += day.predictedUsage
-        daysWithPrediction++
-      } else {
-        simpleProjection += modelDayUsage
-      }
-    })
-    
-    const projectedRemainingUsage = weatherBasedProjection + simpleProjection
+    // All future days now have predictedUsage set
+    const projectedRemainingUsage = futureData.reduce((sum, day) => sum + day.predictedUsage, 0)
     const totalProjectedUsage = billToDateUsage + projectedRemainingUsage
+    
+    // Count days with weather-based vs model-based predictions
+    const weatherBasedDays = futureData.filter(d => d.isForecast && d.similarDay).length
     
     const monthToDateCost = calculateCostBreakdown(billToDateUsage)
     const remainingCost = calculateCostBreakdown(projectedRemainingUsage)
@@ -297,10 +311,10 @@ export default function CostInsightsTab({
       totalProjectedUsage,
       projectedMonthlyCost,
       remainingDays: futureData.length,
-      weatherBasedDays: daysWithPrediction,
-      simpleProjectionDays: futureData.length - daysWithPrediction
+      weatherBasedDays: weatherBasedDays,
+      simpleProjectionDays: futureData.length - weatherBasedDays
     }
-  }
+  }, [getCurrentMonthData, getBillingPeriodData])
 
   const getSelectedDayData = useMemo(() => {
     return (selectedDate: string) => {
@@ -361,9 +375,9 @@ export default function CostInsightsTab({
                             if (data.isForecast && data.similarDay) {
                               status = ` (predicted based on ${format(parseISO(data.similarDay.date), 'MMM dd')}, ${data.similarDay.tempDiff.toFixed(1)}°F diff)`
                             } else if (data.isForecast) {
-                              status = ' (forecast weather, no similar day found)'
+                              status = ' (forecast weather, using model day)'
                             } else {
-                              status = ' (no forecast)'
+                              status = ' (no weather forecast, using model day)'
                             }
                           } else if (data.isToday) {
                             status = ' (today)'
@@ -372,6 +386,8 @@ export default function CostInsightsTab({
                         }
                         return label
                       }}
+                      position={{ y: -50 }}
+                      allowEscapeViewBox={{ x: false, y: true }}
                     />
                     <Legend 
                       content={() => null} // Hide the default legend
@@ -409,14 +425,34 @@ export default function CostInsightsTab({
                       style={{ cursor: 'pointer' }}
                     >
                       {billingPeriodData.map((entry, index) => {
-                        const fillColor = 'transparent';
+                        let fillColor = 'transparent'
+                        let strokeColor = 'transparent'
+                        let strokeDasharray = undefined
+                        let strokeWidth = 0
+                        
+                        if (entry.isFuture && entry.predictedUsage > 0) {
+                          if (entry.isForecast && entry.similarDay) {
+                            // Weather-based prediction - filled orange bar
+                            fillColor = '#fbbf24'
+                            strokeColor = '#f59e0b'
+                            strokeDasharray = '4 2'
+                            strokeWidth = 1
+                          } else {
+                            // Model day prediction - outline only
+                            fillColor = 'transparent'
+                            strokeColor = '#f59e0b'
+                            strokeDasharray = '4 2'
+                            strokeWidth = 2
+                          }
+                        }
                         
                         return (
                           <Cell
-                          key={`predicted-${index}`}
-                          fill={fillColor}
-                          stroke={'red'}
-                          strokeDasharray={fillColor !== 'transparent' ? '4 2' : undefined}
+                            key={`predicted-${index}`}
+                            fill={fillColor}
+                            stroke={strokeColor}
+                            strokeDasharray={strokeDasharray}
+                            strokeWidth={strokeWidth}
                           />
                         )
                       })}
@@ -429,6 +465,10 @@ export default function CostInsightsTab({
                       strokeWidth={2}
                       dot={(props: {index: number, cx: number, cy: number}) => {
                         const data = billingPeriodData[props.index]
+                        // Don't render dot if no temperature data
+                        if (data.avgTemp === null) {
+                          return null
+                        }
                         if (data.isForecast) {
                           // Dashed circle for forecast
                           return (
@@ -513,9 +553,9 @@ export default function CostInsightsTab({
             {(() => {
               if (selectedModelDay) {
                 const selectedDate = parseISO(selectedModelDay)
-                return `${format(selectedDate, 'MMM dd')}&apos;s Usage Pattern`
+                return `${format(selectedDate, 'MMM dd')}'s Usage Pattern`
               } else {
-                return "Yesterday&apos;s Usage Pattern"
+                return "Yesterday's Usage Pattern"
               }
             })()}
           </h3>
@@ -631,17 +671,7 @@ export default function CostInsightsTab({
             </div>
           )}
           {(() => {
-            let selectedDayUsage = 0
-            
-            if (selectedModelDay) {
-              const selectedDayData = getSelectedDayData(selectedModelDay)
-              selectedDayUsage = selectedDayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-            } else {
-              const last7DaysData = getLast7DaysData
-              const yesterdayData = last7DaysData.find(d => d.isYesterday)
-              selectedDayUsage = yesterdayData?.usage || 0
-            }
-            const projection = getModelDayProjection(selectedDayUsage)
+            const projection = getModelDayProjection
             
             // Calculate breakdown for the total projected monthly usage
             const { variableBreakdown, fixedBreakdown, variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)

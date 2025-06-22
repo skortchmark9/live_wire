@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
-import OverviewTab from './OverviewTab'
 import CostInsightsTab from './CostInsightsTab'
 import { useElectricityData } from '@/hooks/useElectricityData'
 import { useWeatherData } from '@/hooks/useWeatherData'
@@ -33,18 +32,18 @@ export default function ElectricityDashboard() {
   const loading = electricityLoading || weatherLoading
   const error = electricityError || weatherError
   const [timeRange, setTimeRange] = useState<TimeRange>('7d')
-  const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('cost')
   const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
   // Process electricity data
   useEffect(() => {
     if (electricityApiData) {
+      setConedForecast(electricityApiData.forecast_data?.[0] || null)
       setElectricityData((electricityApiData.usage_data || []).map(item => ({
         ...item,
         provided_cost: item.provided_cost ?? null
       })))
-      setConedForecast(electricityApiData.forecast_data?.[0] || null)
     }
   }, [electricityApiData])
 
@@ -133,26 +132,6 @@ export default function ElectricityDashboard() {
     <div className="space-y-6">
       <div className="flex gap-4 border-b">
         <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 border-b-2 ${
-            activeTab === 'overview' 
-              ? 'border-blue-500 text-blue-600 font-semibold' 
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Usage Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('disaggregation')}
-          className={`px-4 py-2 border-b-2 ${
-            activeTab === 'disaggregation' 
-              ? 'border-blue-500 text-blue-600 font-semibold' 
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Appliance Analysis
-        </button>
-        <button
           onClick={() => setActiveTab('cost')}
           className={`px-4 py-2 border-b-2 ${
             activeTab === 'cost' 
@@ -161,6 +140,17 @@ export default function ElectricityDashboard() {
           }`}
         >
           Cost Insights
+        </button>
+
+        <button
+          onClick={() => setActiveTab('disaggregation')}
+          className={`px-4 py-2 border-b-2 ${
+            activeTab === 'disaggregation' 
+              ? 'border-blue-500 text-blue-600 font-semibold' 
+              : 'border-transparent text-gray-600 hover:text-gray-800'
+          }`}
+        >
+          AC Analysis
         </button>
       </div>
 
@@ -181,14 +171,7 @@ export default function ElectricityDashboard() {
             weather_code: 0
           }))}
         />
-      ) : (
-        <OverviewTab
-          combinedData={combinedData}
-          predictions={[]}
-          timeRange={timeRange}
-          setTimeRange={setTimeRange}
-        />
-      )}
+      ) : null}
     </div>
   )
 }
