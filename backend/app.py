@@ -115,11 +115,18 @@ async def login(request: Request, login_request: LoginRequest, response: Respons
     session_id = await auth_manager.create_session(login_request.username, login_request.password)
     
     # Set session cookie with the session_id
+    # Use environment variable for cookie domain (None for localhost, .railway.app for production)
+    cookie_domain = os.getenv("COOKIE_DOMAIN")  # None for localhost, ".railway.app" for production
+    is_production = cookie_domain is not None
+    
+    logger.info(f"Setting cookie - Production: {is_production}, Domain: {cookie_domain}")
+    
     response.set_cookie(
         key="user_session", 
         value=session_id,
-        secure=True,  # Set to True in production with HTTPS
-        samesite="lax",
+        domain=cookie_domain,  # None for localhost, cross-domain for production
+        secure=is_production,  # False for localhost HTTP, True for production HTTPS
+        samesite="none" if is_production else "lax",  # none for cross-domain, lax for localhost
         max_age=7200  # 2 hours
     )
     
