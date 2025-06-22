@@ -20,6 +20,52 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "opower" / "src"))
 
 from opower import Opower, AggregateType, ReadResolution
 
+
+async def fetch_forecast_data(api: Opower, account) -> List[Dict]:
+    """Fetch ConEd forecast data"""
+    try:
+        print("Collecting forecast data for billing period and ConEd predictions")
+        forecasts = await api.async_get_forecast()
+        forecast_data = []
+        
+        for forecast in forecasts:
+            if forecast.account.meter_type.value == 'ELEC':
+                forecast_info = {
+                    "bill_start_date": forecast.start_date.isoformat(),
+                    "bill_end_date": forecast.end_date.isoformat(),
+                    "current_date": forecast.current_date.isoformat(),
+                    "unit_of_measure": forecast.unit_of_measure.value,
+                    "usage_to_date": forecast.usage_to_date,
+                    "cost_to_date": forecast.cost_to_date,
+                    "forecasted_usage": forecast.forecasted_usage,
+                    "forecasted_cost": forecast.forecasted_cost,
+                    "typical_usage": forecast.typical_usage,
+                    "typical_cost": forecast.typical_cost,
+                    "account_id": forecast.account.utility_account_id
+                }
+                forecast_data.append(forecast_info)
+        
+        if not forecast_data:
+            usage_reads = await api.async_get_usage_reads(
+                account,
+                AggregateType.BILL,
+            )
+            last_bill = usage_reads[-1]
+            return [{
+                'bill_start_date': last_bill.end_time.isoformat(),
+                'bill_end_date': (last_bill.end_time + timedelta(days=30)).isoformat(),
+                'usage_to_date': 0,
+                'forecasted_usage': 0,
+                "account_id": account.utility_account_id,
+            }]
+            
+        print(f"Collected {len(forecast_data)} forecast records")
+        return forecast_data
+            
+    except Exception as e:
+        print(f"Error collecting forecast data: {e}")
+        return []
+
 async def collect_electricity_data(authenticated_api: Opower) -> Dict:
     """
     Full electricity data collection including usage and forecast data.
@@ -114,44 +160,13 @@ async def collect_electricity_data(authenticated_api: Opower) -> Dict:
             print(f"Error collecting realtime data: {e}")
             return []
 
-    async def fetch_forecast_data():
-        """Fetch ConEd forecast data"""
-        try:
-            print("Collecting forecast data for billing period and ConEd predictions")
-            forecasts = await api.async_get_forecast()
-            forecast_data = []
-            
-            for forecast in forecasts:
-                if forecast.account.meter_type.value == 'ELEC':
-                    forecast_info = {
-                        "bill_start_date": forecast.start_date.isoformat(),
-                        "bill_end_date": forecast.end_date.isoformat(),
-                        "current_date": forecast.current_date.isoformat(),
-                        "unit_of_measure": forecast.unit_of_measure.value,
-                        "usage_to_date": forecast.usage_to_date,
-                        "cost_to_date": forecast.cost_to_date,
-                        "forecasted_usage": forecast.forecasted_usage,
-                        "forecasted_cost": forecast.forecasted_cost,
-                        "typical_usage": forecast.typical_usage,
-                        "typical_cost": forecast.typical_cost,
-                        "account_id": forecast.account.utility_account_id
-                    }
-                    forecast_data.append(forecast_info)
-            
-            print(f"Collected {len(forecast_data)} forecast records")
-            return forecast_data
-                
-        except Exception as e:
-            print(f"Error collecting forecast data: {e}")
-            return []
-
     # Run all 3 data collection operations in parallel
     collection_start = time.time()
     print("Starting parallel data collection...")
     historical_data, realtime_data, forecast_data = await asyncio.gather(
         fetch_historical_usage(),
         fetch_realtime_usage(), 
-        fetch_forecast_data()
+        fetch_forecast_data(api, elec_account)
     )
     collection_time = time.time() - collection_start
     print(f"Parallel data collection took {collection_time:.2f}s")

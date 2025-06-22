@@ -5,15 +5,17 @@ Test script for ConEd authentication with interactive MFA
 import asyncio
 import aiohttp
 import sys
+import getpass
 from pathlib import Path
 
 # Add opower to path
 sys.path.insert(0, str(Path(__file__).parent / "opower" / "src"))
-from opower import Opower
+from opower import Opower, AggregateType
+from datetime import datetime, timedelta
 
 async def test_coned_login():
     username = input("Enter ConEd username: ")
-    password = input("Enter ConEd password: ")
+    password = getpass.getpass("Enter ConEd password: ")
     
     print(f"Testing login for user: {username}")
     
@@ -34,13 +36,30 @@ async def test_coned_login():
             
             print("✅ Login successful!")
             print(f"Access token: {api.access_token[:20]}..." if api.access_token else "No access token")
-            
+
+            forecasts = await api.async_get_forecast()
+            print(forecasts)
+
             # Try to get account info to verify authentication
             print("\nTesting API call...")
             accounts = await api.async_get_accounts()
             print(f"Found {len(accounts)} accounts")
+
+            elec_account = None
             for account in accounts:
-                print(f"  Account: {account}")
+                if account.meter_type.value == 'ELEC' and account.read_resolution and 'QUARTER' in account.read_resolution.value:
+                    elec_account = account
+                    break
+
+            usage_reads = await api.async_get_usage_reads(
+                elec_account,
+                AggregateType.BILL,
+                # start_date=datetime.now() - timedelta(days=30),
+                # end_date=datetime.now()
+            )
+            last_bill = usage_reads[-1]
+            print(f"Last bill start date: {last_bill.start_time}, end date: {last_bill.end_time}")
+
                 
     except Exception as e:
         print(f"❌ Error: {e}")

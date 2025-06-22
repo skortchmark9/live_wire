@@ -326,6 +326,7 @@ export default function CostInsightsTab({
     }
   }, [dailyDataBuckets])
 
+
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2 space-y-6">
@@ -527,6 +528,7 @@ export default function CostInsightsTab({
                   {lastMonthData.map((day) => (
                     <button
                       key={day.date}
+                      data-date={day.date}
                       onClick={() => setSelectedModelDay(day.date)}
                       onMouseEnter={() => setHoveredDay(day.date)}
                       onMouseLeave={() => setHoveredDay(null)}
