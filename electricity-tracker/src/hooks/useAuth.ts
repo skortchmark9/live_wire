@@ -1,146 +1,111 @@
-import { useState, useEffect, useCallback } from 'react';
-import { APIClient, AuthStatus } from '@/lib/api';
+import { useState, useCallback } from 'react';
+import useSWR from 'swr';
+import { postFetcher, fetcher } from '@/lib/swr';
 
-export interface AuthState {
-  sessionId: string | null;
-  status: AuthStatus['status'] | null;
-  error: string | null;
-  isLoading: boolean;
-  data: unknown | null;
+export interface LoginResponse {
+  session_id: string;
+  message: string;
+}
+
+export interface AuthStatus {
+  status: 'authenticating' | 'mfa_required' | 'success' | 'failed' | 'timeout';
+  error?: string;
+  data?: unknown;
 }
 
 export function useAuth() {
-  const [authState, setAuthState] = useState<AuthState>({
-    sessionId: null,
-    status: null,
-    error: null,
-    isLoading: false,
-    data: null,
-  });
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isMFASubmitting, setIsMFASubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
-  const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
+  // Use SWR to poll auth status (only when sessionId exists)
+  const { data: authStatus, error: statusError, mutate } = useSWR<AuthStatus>(
+    sessionId ? `/api/auth/status/${sessionId}` : null,
+    fetcher,
+    {
+      refreshInterval: (data) => {
+        // Stop polling if we're in a terminal state
+        if (data && ['success', 'failed', 'timeout'].includes(data.status)) {
+          return 0; // Stop polling
+        }
+        return 2000; // Poll every 2 seconds
+      },
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      errorRetryCount: 3,
+    }
+  );
 
   const login = useCallback(async (username: string, password: string) => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    setIsLoggingIn(true);
+    setAuthError(null);
 
     try {
-      const response = await APIClient.login(username, password);
-      setAuthState(prev => ({
-        ...prev,
-        sessionId: response.session_id,
-        status: 'authenticating',
-        isLoading: false,
-      }));
-
-      // Start polling for auth status
-      startPolling(response.session_id);
+      const result: LoginResponse = await postFetcher('/api/auth/login', {
+        username,
+        password,
+      });
+      setSessionId(result.session_id);
+      return result;
     } catch (error) {
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Login failed',
-      }));
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      setAuthError(errorMessage);
+      throw error;
+    } finally {
+      setIsLoggingIn(false);
     }
   }, []);
 
   const submitMFA = useCallback(async (mfaCode: string) => {
-    if (!authState.sessionId) return;
+    if (!sessionId) {
+      throw new Error('No session ID available');
+    }
 
-    setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    setIsMFASubmitting(true);
+    setAuthError(null);
 
     try {
-      await APIClient.submitMFA(authState.sessionId, mfaCode);
-      // Continue polling - the status will update automatically
-      setAuthState(prev => ({ ...prev, isLoading: false }));
+      const result = await postFetcher('/api/auth/mfa', {
+        session_id: sessionId,
+        mfa_code: mfaCode,
+      });
+      // Trigger immediate revalidation of auth status after MFA
+      mutate();
+      return result;
     } catch (error) {
-      setAuthState(prev => ({
-        ...prev,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'MFA submission failed',
-      }));
+      const errorMessage = error instanceof Error ? error.message : 'MFA submission failed';
+      setAuthError(errorMessage);
+      throw error;
+    } finally {
+      setIsMFASubmitting(false);
     }
-  }, [authState.sessionId]);
-
-  const checkStatus = useCallback(async (sessionId: string) => {
-    if (!sessionId) return;
-
-    console.log('Checking auth status for session:', sessionId);
-    try {
-      const status = await APIClient.checkAuthStatus(sessionId);
-      console.log('Status response:', status);
-      setAuthState(prev => ({
-        ...prev,
-        status: status.status,
-        error: status.error || null,
-        data: status.data || null,
-      }));
-
-      // Stop polling if we're in a terminal state
-      if (['success', 'failed', 'timeout'].includes(status.status)) {
-        console.log('Terminal status reached, stopping polling');
-        stopPolling();
-      }
-    } catch (error) {
-      console.error('Status check error:', error);
-      setAuthState(prev => ({
-        ...prev,
-        error: error instanceof Error ? error.message : 'Status check failed',
-      }));
-      stopPolling();
-    }
-  }, []);
-
-  const startPolling = useCallback((sessionId: string) => {
-    // Clear any existing interval
-    setPollInterval(prev => {
-      if (prev) {
-        clearInterval(prev);
-      }
-      return null;
-    });
-
-    // Poll every 2 seconds
-    const interval = setInterval(() => {
-      checkStatus(sessionId);
-    }, 2000);
-
-    setPollInterval(interval);
-
-    // Also check immediately
-    checkStatus(sessionId);
-  }, [checkStatus]);
-
-  const stopPolling = useCallback(() => {
-    setPollInterval(prev => {
-      if (prev) {
-        clearInterval(prev);
-      }
-      return null;
-    });
-  }, []);
+  }, [sessionId, mutate]);
 
   const reset = useCallback(() => {
-    stopPolling();
-    setAuthState({
-      sessionId: null,
-      status: null,
-      error: null,
-      isLoading: false,
-      data: null,
-    });
-  }, [stopPolling]);
+    setSessionId(null);
+    setAuthError(null);
+    setIsLoggingIn(false);
+    setIsMFASubmitting(false);
+    // Clear SWR cache for this session
+    mutate(undefined, false);
+  }, [mutate]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
-    };
-  }, [pollInterval]);
+  // Determine overall loading state
+  const isLoading = isLoggingIn || isMFASubmitting || (!!sessionId && !authStatus && !statusError);
+
+  // Determine overall error state
+  const error = authError || (statusError instanceof Error ? statusError.message : null);
 
   return {
-    ...authState,
+    // State
+    sessionId,
+    status: authStatus?.status || null,
+    error: error || authStatus?.error || null,
+    isLoading,
+    data: authStatus?.data || null,
+    
+    // Actions
     login,
     submitMFA,
     reset,

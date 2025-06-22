@@ -1,26 +1,60 @@
-import { APIClient } from './api';
+// Ensure the API URL has the correct protocol
+export const getApiBaseUrl = () => {
+  const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  
+  // If the URL doesn't start with http:// or https://, use current protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
+    return `${protocol}//${url}`;
+  }
+  
+  return url;
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
+// Custom error type for SWR
+export class FetchError extends Error {
+  status: number;
+  info: unknown;
+
+  constructor(message: string, status: number, info: unknown) {
+    super(message);
+    this.status = status;
+    this.info = info;
+  }
+}
 
 // SWR fetcher function
-export const fetcher = async (url: string) => {
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-  
-  // Map SWR keys to our API client methods
-  switch (url) {
-    case '/api/electricity-data':
-      return APIClient.getElectricityData();
-    case '/api/weather-data':
-      return fetch(`${baseUrl}/api/weather-data`, { credentials: 'include' }).then(res => {
-        if (!res.ok) throw new Error('Failed to fetch weather data');
-        return res.json();
-      });
-    case '/api/predictions':
-      return fetch(`${baseUrl}/api/predictions`, { credentials: 'include' }).then(res => {
-        if (!res.ok) throw new Error('Failed to fetch predictions');
-        return res.json();
-      });
-    default:
-      throw new Error(`Unknown API endpoint: ${url}`);
+export const fetcher = async (path: string) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'include', // Include cookies for session management
+  });
+
+  if (!response.ok) {
+    const info = await response.json().catch(() => ({}));
+    throw new FetchError(`Error fetching ${path}`, response.status, info);
   }
+
+  return response.json();
+};
+
+// POST fetcher for mutations (login, MFA, etc.)
+export const postFetcher = async (path: string, data: unknown) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const info = await response.json().catch(() => ({}));
+    throw new FetchError(`Error posting to ${path}`, response.status, info);
+  }
+  return response.json();
 };
 
 // SWR configuration

@@ -25,7 +25,7 @@ export function useWeatherData() {
   return {
     data: data || null,
     isLoading,
-    error: error?.message || null,
+    error,
     refetch: mutate,
   };
 }

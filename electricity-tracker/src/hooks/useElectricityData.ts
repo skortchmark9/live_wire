@@ -41,7 +41,7 @@ export function useElectricityData() {
   return {
     data: data || null,
     isLoading,
-    error: error?.message || null,
+    error,
     refetch: mutate, // SWR's mutate function for manual refetch
   };
 }

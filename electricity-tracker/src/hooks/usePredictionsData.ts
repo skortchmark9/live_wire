@@ -34,7 +34,7 @@ export function usePredictionsData() {
   return {
     data: data || null,
     isLoading,
-    error: error?.status === 404 ? null : (error?.message || null), // Don't treat 404 as error
+    error: error?.status === 404 ? null : error, // Don't treat 404 as error
     refetch: mutate,
   };
 }
