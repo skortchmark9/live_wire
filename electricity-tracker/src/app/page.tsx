@@ -1,7 +1,6 @@
 'use client';
 
 import ElectricityDashboard from '@/components/ElectricityDashboard'
-import { LogoutButton } from '@/components/auth/LogoutButton';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 // import { APIClient } from '@/lib/api'; // unused import
@@ -42,10 +41,6 @@ export default function Home() {
 
   return (
     <main className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Electricity Usage Dashboard</h1>
-        <LogoutButton />
-      </div>
       <ElectricityDashboard />
     </main>
   )

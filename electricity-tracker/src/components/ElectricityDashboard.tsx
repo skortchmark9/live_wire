@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
 import CostInsightsTab from './CostInsightsTab'
+import { LogoutButton } from '@/components/auth/LogoutButton'
 import { useElectricityData } from '@/hooks/useElectricityData'
 import { useWeatherData } from '@/hooks/useWeatherData'
 // import { usePredictionsData } from '@/hooks/usePredictionsData' // unused import
@@ -130,28 +131,35 @@ export default function ElectricityDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-4 border-b">
-        <button
-          onClick={() => setActiveTab('cost')}
-          className={`px-4 py-2 border-b-2 ${
-            activeTab === 'cost' 
-              ? 'border-blue-500 text-blue-600 font-semibold' 
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          Cost Insights
-        </button>
-
-        <button
-          onClick={() => setActiveTab('disaggregation')}
-          className={`px-4 py-2 border-b-2 ${
-            activeTab === 'disaggregation' 
-              ? 'border-blue-500 text-blue-600 font-semibold' 
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          AC Analysis
-        </button>
+      <div className="bg-white rounded-lg shadow-sm border">
+        <div className="flex items-center justify-between px-4 h-14">
+          <div className="flex items-center gap-8">
+            <h1 className="text-xl font-bold">Electricity Usage Dashboard</h1>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('cost')}
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  activeTab === 'cost' 
+                    ? 'bg-blue-100 text-blue-700 font-medium' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                Cost Insights
+              </button>
+              <button
+                onClick={() => setActiveTab('disaggregation')}
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  activeTab === 'disaggregation' 
+                    ? 'bg-blue-100 text-blue-700 font-medium' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                AC Analysis
+              </button>
+            </div>
+          </div>
+          <LogoutButton />
+        </div>
       </div>
 
       {activeTab === 'disaggregation' ? (
