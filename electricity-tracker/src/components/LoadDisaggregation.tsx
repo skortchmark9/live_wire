@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 
 interface ElectricityDataPoint {
@@ -96,7 +96,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     setDetectedUsage(detected)
   }
 
-  const detectFridgeCompressor = (data: any[], detected: DetectedUsage[]) => {
+  const detectFridgeCompressor = (data: Array<{timestamp: string, watts: number}>, detected: DetectedUsage[]) => {
     // First pass: find all potential compressor cycles (spikes above baseline)
     const potentialCycles: Array<{start: number, end: number, avgWatts: number, timestamp: string}> = []
     
@@ -179,7 +179,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     })
   }
 
-  const detectLaptopCharging = (data: any[], detected: DetectedUsage[]) => {
+  const detectLaptopCharging = (data: Array<{timestamp: string, watts: number}>, detected: DetectedUsage[]) => {
     // Look for sustained higher usage blocks
     for (let i = 0; i < data.length - 4; i++) { // At least 1 hour
       const block = data.slice(i, i + 4)
@@ -214,7 +214,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     }
   }
 
-  const detectManualAppliances = (data: any[], detected: DetectedUsage[]) => {
+  const detectManualAppliances = (data: Array<{timestamp: string, watts: number}>, detected: DetectedUsage[]) => {
     // Look for any sustained loads above baseline
     for (let i = 0; i < data.length - 2; i++) { // At least 30 minutes
       const current = data[i].watts
@@ -261,7 +261,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     }
   }
 
-  const getBaselineUsage = (data: any[], index: number): number => {
+  const getBaselineUsage = (data: Array<{timestamp: string, watts: number}>, index: number): number => {
     // Calculate baseline by looking at nearby low points
     const window = data.slice(Math.max(0, index - 12), Math.min(data.length, index + 12))
     const sortedWatts = window.map(d => d.watts).sort((a, b) => a - b)
@@ -328,6 +328,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     }))
   }
 
+  /* // unused function
   const getDailyPattern = () => {
     const hourlyUsage: { [hour: number]: { [appliance: string]: number } } = {}
     
@@ -361,13 +362,14 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     console.log('Daily pattern data:', result.slice(0, 3))
     return result
   }
+  */
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading appliance analysis...</div>
   }
 
   const applianceBreakdown = getApplianceBreakdown()
-  const dailyPattern = getDailyPattern()
+  // const dailyPattern = getDailyPattern() // unused variable
   const totalDetectedKwh = detectedUsage.reduce((sum, usage) => sum + usage.estimatedKwh, 0)
 
   return (

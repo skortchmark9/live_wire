@@ -200,8 +200,7 @@ export default function OverviewTab({
                 dataKey="consumption_kwh" 
                 stroke="#059669" 
                 strokeWidth={2}
-                dot={true}
-                dotFill="#059669"
+                dot={{ fill: "#059669" }}
                 name="15-min Usage"
               />
             </LineChart>
@@ -230,8 +229,7 @@ export default function OverviewTab({
                   dataKey="predicted_kwh" 
                   stroke="#f59e0b" 
                   strokeWidth={3}
-                  dot={true}
-                  dotFill="#f59e0b"
+                  dot={{ fill: "#f59e0b" }}
                   name="ML Prediction"
                 />
               </LineChart>

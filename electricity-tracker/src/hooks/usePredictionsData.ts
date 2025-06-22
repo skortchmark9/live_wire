@@ -8,7 +8,7 @@ interface PredictionsData {
     predicted_usage: number;
     confidence: number;
   }>;
-  metadata: any;
+  metadata: unknown;
   count: number;
 }
 

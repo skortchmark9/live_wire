@@ -71,7 +71,7 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
       </button>
 
       <div className="text-sm text-gray-600">
-        <p>We'll temporarily use your credentials to fetch your electricity data.</p>
+        <p>We&apos;ll temporarily use your credentials to fetch your electricity data.</p>
         <p className="mt-1">Your credentials are not stored after the data pull.</p>
       </div>
     </form>

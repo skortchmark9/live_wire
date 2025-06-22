@@ -8,7 +8,7 @@ interface WeatherData {
     humidity: number;
     // Add other weather fields as needed
   }>;
-  metadata: any;
+  metadata: unknown;
   count: number;
 }
 

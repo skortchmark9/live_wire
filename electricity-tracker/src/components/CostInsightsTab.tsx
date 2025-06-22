@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ComposedChart, Cell } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint, ConEdForecast } from './types'
 import { calculateCostBreakdown } from './utils'
@@ -13,7 +13,12 @@ interface CostInsightsTabProps {
   setSelectedModelDay: (day: string | null) => void
   hoveredDay: string | null
   setHoveredDay: (day: string | null) => void
-  weatherData: any[] // Add weather data to access forecast
+  weatherData: Array<{
+    time: string
+    temperature_2m: number
+    relative_humidity_2m: number
+    weather_code: number
+  }> // Add weather data to access forecast
 }
 
 export default function CostInsightsTab({
@@ -108,7 +113,7 @@ export default function CostInsightsTab({
           data: dayData
         }
       })
-      .filter(day => day !== null && day.avgTemp > 0 && day.totalUsage > 0)
+      .filter((day): day is NonNullable<typeof day> => day !== null && day.avgTemp > 0 && day.totalUsage > 0)
     
     if (historicalDays.length === 0) return null
     
@@ -163,16 +168,21 @@ export default function CostInsightsTab({
     const billingPeriodDays = []
     
     // Create weather map for easier lookup
-    const weatherMap = new Map<string, any>()
+    const weatherMap = new Map<string, Array<{
+      time: string
+      temperature_2m: number
+      relative_humidity_2m: number
+      weather_code: number
+    }>>()
     weatherData.forEach(weather => {
-      const dateKey = weather.timestamp.substring(0, 10) // YYYY-MM-DD
+      const dateKey = weather.time.substring(0, 10) // YYYY-MM-DD
       if (!weatherMap.has(dateKey)) {
         weatherMap.set(dateKey, [])
       }
       weatherMap.get(dateKey)!.push(weather)
     })
     
-    let currentDate = new Date(billStart)
+    const currentDate = new Date(billStart)
     while (currentDate <= billEnd) {
       const dateKey = format(currentDate, 'yyyy-MM-dd')
       const dayData = dailyDataBuckets.get(dateKey) || []
@@ -183,7 +193,12 @@ export default function CostInsightsTab({
       let totalUsage = 0
       let avgTemp: number | null = null
       let predictedUsage = 0
-      let similarDay: any = null
+      let similarDay: {
+        date: string
+        similarityScore: number
+        tempDiff: number
+        totalUsage: number
+      } | null = null
       
       if (isHistorical) {
         // Historical data - use actual usage
@@ -205,9 +220,9 @@ export default function CostInsightsTab({
       if (avgTemp === null) {
         const weatherForDay = weatherMap.get(dateKey) || []
         if (weatherForDay.length > 0) {
-          const temps = weatherForDay.filter(w => w.temperature_f !== null && w.temperature_f !== undefined)
+          const temps = weatherForDay.filter(w => w.temperature_2m !== null && w.temperature_2m !== undefined)
           avgTemp = temps.length > 0 
-            ? temps.reduce((sum, w) => sum + w.temperature_f, 0) / temps.length
+            ? temps.reduce((sum, w) => sum + w.temperature_2m, 0) / temps.length
             : null
         }
       }
@@ -216,8 +231,8 @@ export default function CostInsightsTab({
       if (!isHistorical && avgTemp !== null) {
         const weatherForDay = weatherMap.get(dateKey) || []
         const avgHumidity = weatherForDay.length > 0 
-          ? weatherForDay.filter(w => w.apparent_temperature_f !== null)
-              .reduce((sum, w, _, arr) => sum + (w.apparent_temperature_f / arr.length), 0)
+          ? weatherForDay.filter(w => w.relative_humidity_2m !== null)
+              .reduce((sum, w, _, arr) => sum + (w.relative_humidity_2m / arr.length), 0)
           : undefined
         
         similarDay = findSimilarWeatherDay(avgTemp, avgHumidity, currentDate.getDay())
@@ -307,7 +322,7 @@ export default function CostInsightsTab({
                   };
             });
             
-            const today = format(new Date(), 'yyyy-MM-dd')
+            // const today = format(new Date(), 'yyyy-MM-dd') // unused variable
             const futureCount = billingPeriodData.filter(d => d.isFuture).length
             const forecastCount = billingPeriodData.filter(d => d.isForecast).length
             
@@ -412,9 +427,9 @@ export default function CostInsightsTab({
                       dataKey="avgTemp" 
                       stroke="#f59e0b" 
                       strokeWidth={2}
-                      dot={(props) => {
+                      dot={(props: {index: number, cx: number, cy: number}) => {
                         const data = billingPeriodData[props.index]
-                        if (!data || data.avgTemp === null) return null
+                        if (!data || data.avgTemp === null) return <></>   
                         
                         if (data.isForecast) {
                           // Dashed circle for forecast
@@ -500,9 +515,9 @@ export default function CostInsightsTab({
             {(() => {
               if (selectedModelDay) {
                 const selectedDate = parseISO(selectedModelDay)
-                return `${format(selectedDate, 'MMM dd')}'s Usage Pattern`
+                return `${format(selectedDate, 'MMM dd')}&apos;s Usage Pattern`
               } else {
-                return "Yesterday's Usage Pattern"
+                return "Yesterday&apos;s Usage Pattern"
               }
             })()}
           </h3>
@@ -517,7 +532,7 @@ export default function CostInsightsTab({
             
             // Create combined data with hovered day overlay mapped to selected day's timeline
             const chartData = selectedDayData.map(point => {
-              const result = { ...point }
+              const result: CombinedDataPoint & { hoveredDayUsage: number | null } = { ...point, hoveredDayUsage: null }
               
               if (showHoveredOverlay) {
                 // Match by time of day (HH:mm:ss)
@@ -642,7 +657,7 @@ export default function CostInsightsTab({
                     <div className="text-sm text-gray-500">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
                     {conedForecast && (
                       <div className="text-xs text-gray-500 mt-1">
-                        ConEd's forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
+                        ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
                       </div>
                     )}
                   </div>

@@ -6,7 +6,7 @@ export interface AuthState {
   status: AuthStatus['status'] | null;
   error: string | null;
   isLoading: boolean;
-  data: any | null;
+  data: unknown | null;
 }
 
 export function useAuth() {

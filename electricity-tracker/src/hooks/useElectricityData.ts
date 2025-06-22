@@ -21,7 +21,7 @@ interface ElectricityData {
     typical_cost: number;
     account_id: string;
   }>;
-  metadata: any;
+  metadata: unknown;
   usage_count: number;
   forecast_count: number;
 }

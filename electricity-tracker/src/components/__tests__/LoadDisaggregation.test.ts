@@ -39,14 +39,14 @@ const mockElectricityData = [
 ]
 
 // Helper functions extracted from LoadDisaggregation component
-const getBaselineUsage = (data: any[], index: number): number => {
+const getBaselineUsage = (data: Array<{watts: number}>, index: number): number => {
   const window = data.slice(Math.max(0, index - 12), Math.min(data.length, index + 12))
   const sortedWatts = window.map(d => d.watts).sort((a, b) => a - b)
   return sortedWatts[Math.floor(sortedWatts.length * 0.25)]
 }
 
-const detectFridgeCompressor = (data: any[]): any[] => {
-  const detected: any[] = []
+const detectFridgeCompressor = (data: Array<{timestamp: string, watts: number}>): Array<{appliance: string, startTime: string, endTime: string, estimatedKwh: number, confidence: number}> => {
+  const detected: Array<{appliance: string, startTime: string, endTime: string, estimatedKwh: number, confidence: number}> = []
   const potentialCycles: Array<{start: number, end: number, avgWatts: number, timestamp: string}> = []
   
   for (let i = 1; i < data.length - 1; i++) {

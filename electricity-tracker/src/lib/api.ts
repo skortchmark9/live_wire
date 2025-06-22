@@ -8,7 +8,7 @@ export interface LoginResponse {
 export interface AuthStatus {
   status: 'authenticating' | 'mfa_required' | 'success' | 'failed' | 'timeout';
   error?: string;
-  data?: any;
+  data?: unknown;
 }
 
 export class APIClient {
@@ -60,7 +60,7 @@ export class APIClient {
     return response.json();
   }
 
-  static async getElectricityData(): Promise<any> {
+  static async getElectricityData(): Promise<unknown> {
     const response = await fetch(`${API_BASE_URL}/api/electricity-data`, {
       credentials: 'include',
     });

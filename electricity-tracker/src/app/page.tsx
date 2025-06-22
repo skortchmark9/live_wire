@@ -4,7 +4,7 @@ import ElectricityDashboard from '@/components/ElectricityDashboard'
 import { LogoutButton } from '@/components/auth/LogoutButton';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APIClient } from '@/lib/api';
+// import { APIClient } from '@/lib/api'; // unused import
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);

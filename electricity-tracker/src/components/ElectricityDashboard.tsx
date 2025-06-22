@@ -7,12 +7,12 @@ import OverviewTab from './OverviewTab'
 import CostInsightsTab from './CostInsightsTab'
 import { useElectricityData } from '@/hooks/useElectricityData'
 import { useWeatherData } from '@/hooks/useWeatherData'
-import { usePredictionsData } from '@/hooks/usePredictionsData'
+// import { usePredictionsData } from '@/hooks/usePredictionsData' // unused import
 import { 
   ElectricityDataPoint, 
   WeatherDataPoint, 
   CombinedDataPoint, 
-  PredictionDataPoint, 
+  // PredictionDataPoint, // unused type 
   ConEdForecast,
   TimeRange,
   ActiveTab 
@@ -26,7 +26,7 @@ export default function ElectricityDashboard() {
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
   const [combinedData, setCombinedData] = useState<CombinedDataPoint[]>([])
-  const [predictions, setPredictions] = useState<PredictionDataPoint[]>([])
+  // const [predictions, setPredictions] = useState<PredictionDataPoint[]>([]) // unused state
   const [conedForecast, setConedForecast] = useState<ConEdForecast | null>(null)
   
   // Compute overall loading and error states
@@ -40,7 +40,10 @@ export default function ElectricityDashboard() {
   // Process electricity data
   useEffect(() => {
     if (electricityApiData) {
-      setElectricityData(electricityApiData.usage_data || [])
+      setElectricityData((electricityApiData.usage_data || []).map(item => ({
+        ...item,
+        provided_cost: item.provided_cost ?? null
+      })))
       setConedForecast(electricityApiData.forecast_data?.[0] || null)
     }
   }, [electricityApiData])
@@ -48,14 +51,36 @@ export default function ElectricityDashboard() {
   // Process weather data
   useEffect(() => {
     if (weatherApiData) {
-      setWeatherData(weatherApiData.data || [])
+      setWeatherData((weatherApiData.data || []).map(item => ({
+        timestamp: item.timestamp,
+        temperature_f: item.temperature,
+        apparent_temperature_f: null,
+        humidity_percent: item.humidity,
+        precipitation_inch: null,
+        cloud_cover_percent: null,
+        wind_speed_mph: null
+      })))
     }
   }, [weatherApiData])
 
   // Combine data when both electricity and weather are available
   useEffect(() => {
     if (electricityApiData && weatherApiData) {
-      combineData(electricityApiData.usage_data || [], weatherApiData.data || [])
+      combineData(
+        (electricityApiData.usage_data || []).map(item => ({
+          ...item,
+          provided_cost: item.provided_cost ?? null
+        })), 
+        (weatherApiData.data || []).map(item => ({
+          timestamp: item.timestamp,
+          temperature_f: item.temperature,
+          apparent_temperature_f: null,
+          humidity_percent: item.humidity,
+          precipitation_inch: null,
+          cloud_cover_percent: null,
+          wind_speed_mph: null
+        }))
+      )
     }
   }, [electricityApiData, weatherApiData])
 
@@ -158,7 +183,12 @@ export default function ElectricityDashboard() {
           setSelectedModelDay={setSelectedModelDay}
           hoveredDay={hoveredDay}
           setHoveredDay={setHoveredDay}
-          weatherData={weatherData}
+          weatherData={weatherData.map(item => ({
+            time: item.timestamp,
+            temperature_2m: item.temperature_f || 0,
+            relative_humidity_2m: item.humidity_percent || 0,
+            weather_code: 0
+          }))}
         />
       ) : (
         <OverviewTab
