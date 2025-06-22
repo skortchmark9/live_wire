@@ -6,4 +6,4 @@ requests==2.32.3
 pytz==2023.3
 
 # Install patched version of opower
--e opower
+-e ./opower
