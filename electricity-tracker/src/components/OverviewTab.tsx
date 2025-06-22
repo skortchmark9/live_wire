@@ -18,10 +18,12 @@ export default function OverviewTab({
   setTimeRange 
 }: OverviewTabProps) {
   const getFilteredData = () => {
-    if (timeRange === 'all') return combinedData
-
     const now = new Date()
-    const daysAgo = timeRange === '7d' ? 7 : 30
+    const daysAgo = {
+      '7d': 7,
+      '30d': 30,
+      '1d': 1
+    }[timeRange];
     const cutoff = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
 
     return combinedData.filter(d => new Date(d.timestamp) >= cutoff)
@@ -65,6 +67,12 @@ export default function OverviewTab({
       <div className="flex flex-wrap gap-4 items-center justify-between">
         <div className="flex gap-2">
           <button
+            onClick={() => setTimeRange('1d')}
+            className={`px-4 py-2 rounded ${timeRange === '1d' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+          >
+            Last 24 Hours
+          </button>
+          <button
             onClick={() => setTimeRange('7d')}
             className={`px-4 py-2 rounded ${timeRange === '7d' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
           >
@@ -75,12 +83,6 @@ export default function OverviewTab({
             className={`px-4 py-2 rounded ${timeRange === '30d' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
           >
             Last 30 Days
-          </button>
-          <button
-            onClick={() => setTimeRange('all')}
-            className={`px-4 py-2 rounded ${timeRange === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
-          >
-            All Time
           </button>
         </div>
 
@@ -102,40 +104,18 @@ export default function OverviewTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Electricity Usage Over Time</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={filteredData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="timestamp"
-                tickFormatter={(value) => format(parseISO(value), 'MM/dd HH:mm')}
-              />
-              <YAxis />
-              <Tooltip 
-                labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
-                formatter={(value: number) => [value.toFixed(3), 'kWh']}
-              />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="consumption_kwh" 
-                stroke="#2563eb" 
-                strokeWidth={2}
-                dot={false}
-                name="Consumption (kWh)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
           <h3 className="text-lg font-semibold mb-4">Usage vs Temperature</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={filteredData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="timestamp"
-                tickFormatter={(value) => format(parseISO(value), 'MM/dd')}
+                tickFormatter={(value) => {
+                  if (timeRange === '1d') {
+                    return format(parseISO(value), 'HH:mm')
+                  }
+                  return format(parseISO(value), 'MM/dd')
+                }}
               />
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
@@ -178,32 +158,6 @@ export default function OverviewTab({
               />
               <Bar dataKey="avgConsumption" fill="#8b5cf6" />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Recent Usage Pattern</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={filteredData.slice(-96)}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="timestamp"
-                tickFormatter={(value) => format(parseISO(value), 'dd HH:mm')}
-              />
-              <YAxis />
-              <Tooltip 
-                labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
-                formatter={(value: number) => [value.toFixed(3), 'kWh']}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="consumption_kwh" 
-                stroke="#059669" 
-                strokeWidth={2}
-                dot={{ fill: "#059669" }}
-                name="15-min Usage"
-              />
-            </LineChart>
           </ResponsiveContainer>
         </div>
 

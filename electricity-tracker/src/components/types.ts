@@ -57,5 +57,5 @@ export interface CostBreakdown {
   projectedMonthlyCost: number
 }
 
-export type TimeRange = '7d' | '30d' | 'all'
+export type TimeRange = '7d' | '30d' | '1d'
 export type ActiveTab = 'overview' | 'disaggregation' | 'cost'
