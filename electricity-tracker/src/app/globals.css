@@ -31,3 +31,21 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* Mobile-friendly touch targets */
+@media (max-width: 768px) {
+  button, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Improve chart interactions on mobile */
+  .recharts-wrapper {
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Better text sizing for mobile */
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+}

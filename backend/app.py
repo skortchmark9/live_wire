@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
+from opower import exceptions as opower_exceptions
 from opower import Opower
 from data_collectors.electricity_collector import collect_electricity_data
 from contextlib import asynccontextmanager
@@ -193,7 +194,10 @@ async def get_electricity_data_combined(
         api.access_token = session["access_token"]
         
         # Collect data using the token-authenticated API instance
-        result = await collect_electricity_data(api)
+        try:
+            result = await collect_electricity_data(api)
+        except opower_exceptions.ApiException as e:
+            raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
     
     if not result:
         raise HTTPException(status_code=500, detail="Failed to collect electricity data")

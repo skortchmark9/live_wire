@@ -187,15 +187,15 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold dark:text-white">AC Usage Analysis</h2>
-        <div className="flex gap-2">
+    <div className="space-y-4 lg:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">AC Usage Analysis</h2>
+        <div className="flex gap-1 sm:gap-2 sm:ml-auto">
           {(['24h', '7d', '30d'] as const).map(range => (
             <button
               key={range}
               onClick={() => setSelectedTimeRange(range)}
-              className={`px-4 py-2 rounded ${
+              className={`px-3 sm:px-4 py-2 rounded text-sm sm:text-base ${
                 selectedTimeRange === range ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
               }`}
             >
@@ -205,32 +205,32 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{detectedAC.length}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">AC Usage Events</div>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
+        <div className="text-center p-2 sm:p-3 bg-red-50 dark:bg-red-900/20 rounded">
+          <div className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400">{detectedAC.length}</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">Events</div>
         </div>
-        <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">{totalDetectedKwh.toFixed(3)}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">kWh from AC</div>
+        <div className="text-center p-2 sm:p-3 bg-green-50 dark:bg-green-900/20 rounded">
+          <div className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400">{totalDetectedKwh.toFixed(1)}</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">kWh</div>
         </div>
-        <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">${totalDetectedCost.toFixed(2)}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Cost from AC</div>
+        <div className="text-center p-2 sm:p-3 bg-purple-50 dark:bg-purple-900/20 rounded">
+          <div className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">${totalDetectedCost.toFixed(2)}</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">AC Cost</div>
         </div>
-        <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{acPercentage.toFixed(1)}%</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">of Total Usage</div>
+        <div className="text-center p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+          <div className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{acPercentage.toFixed(1)}%</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">of Total</div>
         </div>
-        <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{avgTemp.toFixed(0)}°F</div>
-          <div className="text-sm text-gray-600 dark:text-gray-300">Avg Temp during AC</div>
+        <div className="text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-900/20 rounded">
+          <div className="text-base sm:text-lg font-bold text-orange-600 dark:text-orange-400">{avgTemp.toFixed(0)}°F</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">Avg Temp</div>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-700">
-        <h3 className="text-lg font-semibold mb-4 dark:text-white">Usage & Temperature Correlation</h3>
-        <ResponsiveContainer width="100%" height={400}>
+      <div className="bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow dark:shadow-gray-700">
+        <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 dark:text-white">Usage & Temperature Correlation</h3>
+        <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={getChartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 

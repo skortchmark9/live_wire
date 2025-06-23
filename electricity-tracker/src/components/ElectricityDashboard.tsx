@@ -21,6 +21,7 @@ export default function ElectricityDashboard() {
   // Use SWR hooks for all data fetching
   const { data: electricityApiData, isLoading: electricityLoading, error: electricityError } = useElectricityData()
   const { data: weatherApiData, isLoading: weatherLoading, error: weatherError } = useWeatherData()
+  console.log(electricityError);
   
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
@@ -117,13 +118,9 @@ export default function ElectricityDashboard() {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
         <h2 className="text-red-800 dark:text-red-200 font-semibold mb-2">Error Loading Data</h2>
-        <p className="text-red-600 dark:text-red-300">{error}</p>
-        <p className="text-sm text-red-500 dark:text-red-400 mt-2">
-          Make sure the Flask backend is running:
-          <br />
-          <code className="bg-red-100 dark:bg-red-800/50 px-1 rounded">cd backend && python app.py</code>
-        </p>
-      </div>
+        <p className="text-red-600 dark:text-red-300">{error?.message || String(error)}</p>
+        <pre className="text-red-600 dark:text-red-300">{error?.info?.detail}</pre>
+     </div>
     )
   }
 

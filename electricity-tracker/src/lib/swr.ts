@@ -42,7 +42,7 @@ export const fetcher = async (path: string) => {
       return; // Don't throw error, just redirect
     }
     
-    const info = await response.json().catch(() => ({}));
+    const info = await response.json().catch((e) => ({ ...e }));
     throw new FetchError(`Error fetching ${path}`, response.status, info);
   }
 
