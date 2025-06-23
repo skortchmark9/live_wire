@@ -355,7 +355,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
             <span className="font-medium">Temperature Correlation:</span> Higher confidence when temperature exceeds 75°F
           </p>
           <p>
-            <span className="font-medium">Baseline:</span> Calculated as 25th percentile of usage over selected time period
+            <span className="font-medium">Baseline:</span> Calculated as 18th percentile of usage over selected time period
           </p>
         </div>
       </div>

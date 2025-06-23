@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useCallback } from 'react'
+import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint, ConEdForecast } from './types'
@@ -9,10 +9,6 @@ import { calculateCostBreakdown } from '@/utils/costCalculations'
 interface CostInsightsTabProps {
   combinedData: CombinedDataPoint[]
   conedForecast: ConEdForecast | null
-  selectedModelDay: string | null
-  setSelectedModelDay: (day: string | null) => void
-  hoveredDay: string | null
-  setHoveredDay: (day: string | null) => void
   weatherData: Array<{
     time: string
     temperature_2m: number
@@ -21,15 +17,79 @@ interface CostInsightsTabProps {
   }> // Add weather data to access forecast
 }
 
+// Helper component for bill projection display
+function BillProjection({ 
+  projection, 
+  conedForecast, 
+  isDesktop = false 
+}: { 
+  projection: {
+    monthToDateUsage: number;
+    projectedRemainingUsage: number;
+    totalProjectedUsage: number;
+    remainingDays: number;
+    weatherBasedDays: number;
+  }, 
+  conedForecast: ConEdForecast | null, 
+  isDesktop?: boolean 
+}) {
+  const { variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
+  
+  return (
+    <div className="space-y-4">
+      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+        <div className="text-center">
+          <div className={`font-bold text-green-600 ${isDesktop ? 'text-2xl' : 'text-3xl sm:text-4xl'}`}>
+            ${(variableCost + fixedCost).toFixed(2)}
+          </div>
+          <div className="text-gray-600 dark:text-gray-400 font-medium">Projected Bill</div>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            {projection.totalProjectedUsage.toFixed(0)} kWh total usage
+          </div>
+          {conedForecast && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className='grid grid-cols-2 gap-2'>
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+          <div className={`font-semibold ${isDesktop ? '' : 'text-lg'}`}>
+            {projection.monthToDateUsage.toFixed(0)} kWh
+          </div>
+          <div className="text-gray-600 dark:text-gray-400 text-sm">
+            Used So Far
+          </div>
+        </div>
+        <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded">
+          <div className={`font-semibold ${isDesktop ? '' : 'text-lg'}`}>
+            {projection.projectedRemainingUsage.toFixed(0)} kWh
+          </div>
+          <div className="text-gray-600 dark:text-gray-400 text-sm">
+            Remaining
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CostInsightsTab({
   combinedData,
   conedForecast,
-  selectedModelDay,
-  setSelectedModelDay,
-  hoveredDay,
-  setHoveredDay,
   weatherData
 }: CostInsightsTabProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Initialize selectedModelDay to yesterday
+  const [selectedModelDay, setSelectedModelDay] = useState<string>(() => {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    return format(yesterday, 'yyyy-MM-dd')
+  })
+  const [hoveredDay, setHoveredDay] = useState<string | null>(null)
   // Memoize daily data buckets to avoid repeated filtering
   const dailyDataBuckets = useMemo(() => {
     const buckets = new Map<string, CombinedDataPoint[]>()
@@ -167,18 +227,8 @@ export default function CostInsightsTab({
 
   // Get the model day usage for predictions
   const getModelDayUsage = useMemo(() => {
-    if (selectedModelDay) {
-      const selectedDayData = dailyDataBuckets.get(selectedModelDay) || []
-      return selectedDayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-    } else {
-      // Use yesterday as default
-      const now = new Date()
-      const yesterday = new Date(now)
-      yesterday.setDate(yesterday.getDate() - 1)
-      const yesterdayKey = format(yesterday, 'yyyy-MM-dd')
-      const yesterdayData = dailyDataBuckets.get(yesterdayKey) || []
-      return yesterdayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-    }
+    const selectedDayData = dailyDataBuckets.get(selectedModelDay) || []
+    return selectedDayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
   }, [selectedModelDay, dailyDataBuckets])
 
   const getBillingPeriodData = useMemo(() => {
@@ -326,6 +376,23 @@ export default function CostInsightsTab({
     }
   }, [dailyDataBuckets])
 
+  // Auto-scroll to selected model day
+  useEffect(() => {
+    if (selectedModelDay && scrollContainerRef.current) {
+      // Use setTimeout to ensure DOM is fully rendered
+      const timer = setTimeout(() => {
+        if (scrollContainerRef.current) {
+          const selectedButton = scrollContainerRef.current.querySelector(`[data-date="${selectedModelDay}"]`)
+          if (selectedButton) {
+            selectedButton.scrollIntoView({ block: 'nearest', inline: 'center' })
+          }
+        }
+      }, 100)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [selectedModelDay, getLastMonthData])
+
 
   return (
     <div className="space-y-4 lg:space-y-6">
@@ -339,45 +406,11 @@ export default function CostInsightsTab({
             {format(parseISO(conedForecast.bill_start_date), 'MMM dd')} - {format(parseISO(conedForecast.bill_end_date), 'MMM dd, yyyy')}
           </div>
         )}
-        {(() => {
-          const projection = getModelDayProjection
-          
-          // Calculate breakdown for the total projected monthly usage
-          const { variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
-          
-          return (
-            <div className="space-y-4">
-              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                <div className="text-center">
-                  <div className="text-3xl sm:text-4xl font-bold text-green-600">${(variableCost + fixedCost).toFixed(2)}</div>
-                  <div className="text-gray-600 dark:text-gray-400 font-medium">Projected Bill</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
-                  {conedForecast && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
-                  <div className="font-semibold text-lg">{projection.monthToDateUsage.toFixed(0)} kWh</div>
-                  <div className="text-gray-600 dark:text-gray-400 text-sm">Bill Period to Date</div>
-                </div>
-                <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded">
-                  <div className="font-semibold text-lg">{projection.projectedRemainingUsage.toFixed(0)} kWh</div>
-                  <div className="text-gray-600 dark:text-gray-400 text-sm">Projected Remaining ({projection.remainingDays} days)</div>
-                  {projection.weatherBasedDays > 0 && (
-                    <div className="text-xs text-purple-600 mt-1">
-                      {projection.weatherBasedDays} days weather-based
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })()}
+        <BillProjection 
+          projection={getModelDayProjection} 
+          conedForecast={conedForecast} 
+          isDesktop={false} 
+        />
       </div>
 
       {/* Charts and controls */}
@@ -404,7 +437,7 @@ export default function CostInsightsTab({
                   <span>Full billing period ({billingPeriodData.length} days)</span>
                   {futureCount > 0 && (
                     <span className="text-xs">
-                      {forecastCount} days with weather forecast • {futureCount - forecastCount} based on {selectedModelDay}
+                      {forecastCount} future days with weather forecast • {futureCount - forecastCount} based on {selectedModelDay}
                     </span>
                   )}
                 </div>
@@ -570,13 +603,19 @@ export default function CostInsightsTab({
           </div>
         
         <div className="bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-          <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-gray-100">Select a Model Day</h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 sm:mb-4">Choose a day from the past month to use as the basis for projecting future usage</p>
+          <div className="inline-flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-gray-100">
+              Select a Model Day
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 sm:mb-4">
+              Used when we don&apos;t have weather data.
+            </p>
+          </div>
           {(() => {
             const lastMonthData = getLastMonthData
             
             return (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" ref={scrollContainerRef}>
                 <div className="flex gap-2 pb-2">
                   {lastMonthData.map((day) => (
                     <button
@@ -586,7 +625,7 @@ export default function CostInsightsTab({
                       onMouseEnter={() => setHoveredDay(day.date)}
                       onMouseLeave={() => setHoveredDay(null)}
                       className={`flex-shrink-0 p-3 sm:p-4 rounded-lg border-2 transition-all touch-manipulation ${
-                        selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
+                        selectedModelDay === day.date
                           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
                       }`}
@@ -613,19 +652,10 @@ export default function CostInsightsTab({
         
         <div className="bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-900 dark:text-gray-100">
-            {(() => {
-              if (selectedModelDay) {
-                const selectedDate = parseISO(selectedModelDay)
-                return `${format(selectedDate, 'MMM dd')}'s Usage Pattern`
-              } else {
-                return "Yesterday's Usage Pattern"
-              }
-            })()}
+            {format(parseISO(selectedModelDay), 'MMM dd')}&apos;s Usage Pattern
           </h3>
           {(() => {
-            const yesterday = new Date()
-            yesterday.setDate(yesterday.getDate() - 1)
-            const selectedDate = selectedModelDay || format(yesterday, 'yyyy-MM-dd')
+            const selectedDate = selectedModelDay
             const selectedDayData = getSelectedDayData(selectedDate)
             // Get hovered day data if hovering
             const hoveredDayData = hoveredDay ? getSelectedDayData(hoveredDay) : []
@@ -721,45 +751,11 @@ export default function CostInsightsTab({
                 {format(parseISO(conedForecast.bill_start_date), 'MMM dd')} - {format(parseISO(conedForecast.bill_end_date), 'MMM dd, yyyy')}
               </div>
             )}
-            {(() => {
-              const projection = getModelDayProjection
-              
-              // Calculate breakdown for the total projected monthly usage
-              const { variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
-              
-              return (
-                <div className="space-y-4">
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">${(variableCost + fixedCost).toFixed(2)}</div>
-                      <div className="text-gray-600 dark:text-gray-400">Projected Bill</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
-                      {conedForecast && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-2 text-xs">
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-                      <div className="font-semibold">{projection.monthToDateUsage.toFixed(0)} kWh</div>
-                      <div className="text-gray-600 dark:text-gray-400">Bill Period to Date</div>
-                    </div>
-                    <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
-                      <div className="font-semibold">{projection.projectedRemainingUsage.toFixed(0)} kWh</div>
-                      <div className="text-gray-600 dark:text-gray-400">Projected Remaining ({projection.remainingDays} days)</div>
-                      {projection.weatherBasedDays > 0 && (
-                        <div className="text-xs text-purple-600 mt-1">
-                          {projection.weatherBasedDays} days weather-based
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
+            <BillProjection 
+              projection={getModelDayProjection} 
+              conedForecast={conedForecast} 
+              isDesktop={true} 
+            />
           </div>
 
           {/* Detailed Cost Breakdown */}

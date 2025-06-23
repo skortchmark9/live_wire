@@ -10,7 +10,7 @@ export function calculateBaseline(data: DataPoint[]): number {
   // Calculate baseline usage (25th percentile)
   const allWatts = data.map(d => d.watts);
   const sortedWatts = [...allWatts].sort((a, b) => a - b);
-  const baselineWatts = sortedWatts[Math.floor(sortedWatts.length * 0.15)];
+  const baselineWatts = sortedWatts[Math.floor(sortedWatts.length * 0.18)];
   
   return baselineWatts;
 }

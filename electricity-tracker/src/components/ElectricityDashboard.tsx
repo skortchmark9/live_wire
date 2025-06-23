@@ -21,7 +21,6 @@ export default function ElectricityDashboard() {
   // Use SWR hooks for all data fetching
   const { data: electricityApiData, isLoading: electricityLoading, error: electricityError } = useElectricityData()
   const { data: weatherApiData, isLoading: weatherLoading, error: weatherError } = useWeatherData()
-  console.log(electricityError);
   
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
@@ -33,8 +32,6 @@ export default function ElectricityDashboard() {
   const loading = electricityLoading || weatherLoading
   const error = electricityError || weatherError
   const [activeTab, setActiveTab] = useState<ActiveTab>('cost')
-  const [selectedModelDay, setSelectedModelDay] = useState<string | null>(null)
-  const [hoveredDay, setHoveredDay] = useState<string | null>(null)
 
   // Process electricity data
   useEffect(() => {
@@ -134,10 +131,6 @@ export default function ElectricityDashboard() {
         <CostInsightsTab
           combinedData={combinedData}
           conedForecast={conedForecast}
-          selectedModelDay={selectedModelDay}
-          setSelectedModelDay={setSelectedModelDay}
-          hoveredDay={hoveredDay}
-          setHoveredDay={setHoveredDay}
           weatherData={weatherData.map(item => ({
             time: item.timestamp,
             temperature_2m: item.temperature_f || 0,
