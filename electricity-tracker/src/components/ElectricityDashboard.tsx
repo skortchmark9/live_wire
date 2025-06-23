@@ -108,20 +108,20 @@ export default function ElectricityDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading electricity usage data...</div>
+        <div className="text-lg text-gray-900 dark:text-gray-100">Loading electricity usage data...</div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-        <h2 className="text-red-800 font-semibold mb-2">Error Loading Data</h2>
-        <p className="text-red-600">{error}</p>
-        <p className="text-sm text-red-500 mt-2">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+        <h2 className="text-red-800 dark:text-red-200 font-semibold mb-2">Error Loading Data</h2>
+        <p className="text-red-600 dark:text-red-300">{error}</p>
+        <p className="text-sm text-red-500 dark:text-red-400 mt-2">
           Make sure the Flask backend is running:
           <br />
-          <code className="bg-red-100 px-1 rounded">cd backend && python app.py</code>
+          <code className="bg-red-100 dark:bg-red-800/50 px-1 rounded">cd backend && python app.py</code>
         </p>
       </div>
     )
@@ -129,17 +129,17 @@ export default function ElectricityDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-8">
-            <h1 className="text-xl font-bold">Electricity Usage Dashboard</h1>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Electricity Usage Dashboard</h1>
             <div className="flex gap-1">
               <button
                 onClick={() => setActiveTab('cost')}
                 className={`px-4 py-2 rounded-md transition-colors ${
                   activeTab === 'cost' 
-                    ? 'bg-blue-100 text-blue-700 font-medium' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
                 Cost Insights
@@ -148,8 +148,8 @@ export default function ElectricityDashboard() {
                 onClick={() => setActiveTab('disaggregation')}
                 className={`px-4 py-2 rounded-md transition-colors ${
                   activeTab === 'disaggregation' 
-                    ? 'bg-blue-100 text-blue-700 font-medium' 
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium' 
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
                 AC Analysis

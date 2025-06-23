@@ -330,8 +330,8 @@ export default function CostInsightsTab({
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2 space-y-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Billing Period Usage & Temperature</h3>
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Billing Period Usage & Temperature</h3>
           {(() => {
             const billingPeriodData = getBillingPeriodData.map((x) => {
                   return {
@@ -347,7 +347,7 @@ export default function CostInsightsTab({
             
             return billingPeriodData.length > 0 ? (
               <div>
-                <div className="text-sm text-gray-600 mb-3 flex justify-between items-center">
+                <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 flex justify-between items-center">
                   <span>Full billing period ({billingPeriodData.length} days)</span>
                   {futureCount > 0 && (
                     <span className="text-xs">
@@ -509,16 +509,16 @@ export default function CostInsightsTab({
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="text-center text-gray-500 py-8">
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                 No billing period data available
               </div>
             )
           })()}
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">Select a Model Day</h3>
-          <p className="text-sm text-gray-600 mb-4">Choose a day from the past month to use as the basis for projecting future usage</p>
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Select a Model Day</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Choose a day from the past month to use as the basis for projecting future usage</p>
           {(() => {
             const lastMonthData = getLastMonthData
             
@@ -534,21 +534,21 @@ export default function CostInsightsTab({
                       onMouseLeave={() => setHoveredDay(null)}
                       className={`flex-shrink-0 p-4 rounded-lg border-2 transition-all ${
                         selectedModelDay === day.date || (!selectedModelDay && day.isYesterday)
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
                       }`}
                       style={{ minWidth: '130px', cursor: 'pointer' }}
                     >
                       <div className="text-center">
-                        <div className="text-xs font-medium text-gray-600">{day.dayOfWeek}</div>
-                        <div className="text-sm font-semibold">{day.displayDate}</div>
+                        <div className="text-xs font-medium text-gray-600 dark:text-gray-400">{day.dayOfWeek}</div>
+                        <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{day.displayDate}</div>
                         <div className="text-lg font-bold text-green-600 mt-1">{day.usage.toFixed(1)}</div>
-                        <div className="text-xs text-gray-500">kWh</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">kWh</div>
                         <div className="text-sm font-semibold text-blue-600">${day.cost.toFixed(2)}</div>
                         {day.avgTemp !== null && (
                           <div className="text-xs text-orange-600 font-medium">{day.avgTemp.toFixed(0)}°F</div>
                         )}
-                        {day.isToday && <div className="text-xs text-gray-400 mt-1">Today</div>}
+                        {day.isToday && <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">Today</div>}
                       </div>
                     </button>
                   ))}
@@ -558,8 +558,8 @@ export default function CostInsightsTab({
           })()}
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
             {(() => {
               if (selectedModelDay) {
                 const selectedDate = parseISO(selectedModelDay)
@@ -648,7 +648,7 @@ export default function CostInsightsTab({
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-center text-gray-500 py-8">
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                 No data available for selected day
               </div>
             )
@@ -657,12 +657,12 @@ export default function CostInsightsTab({
       </div>
       
       <div className="xl:col-span-1 space-y-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold mb-2">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
             Billing Period Costs
           </h3>
           {conedForecast && (
-            <div className="text-sm text-gray-600 mb-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
               {format(parseISO(conedForecast.bill_start_date), 'MMM dd')} - {format(parseISO(conedForecast.bill_end_date), 'MMM dd, yyyy')}
             </div>
           )}
@@ -674,13 +674,13 @@ export default function CostInsightsTab({
             
             return (
               <div className="space-y-4">
-                <div className="bg-green-50 p-4 rounded-lg">
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">${(variableCost + fixedCost).toFixed(2)}</div>
-                    <div className="text-gray-600">Projected Bill</div>
-                    <div className="text-sm text-gray-500">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
+                    <div className="text-gray-600 dark:text-gray-400">Projected Bill</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">{projection.totalProjectedUsage.toFixed(0)} kWh total usage</div>
                     {conedForecast && (
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
                       </div>
                     )}
@@ -688,13 +688,13 @@ export default function CostInsightsTab({
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-blue-50 p-2 rounded">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
                     <div className="font-semibold">{projection.monthToDateUsage.toFixed(0)} kWh</div>
-                    <div className="text-gray-600">Bill Period to Date</div>
+                    <div className="text-gray-600 dark:text-gray-400">Bill Period to Date</div>
                   </div>
-                  <div className="bg-orange-50 p-2 rounded">
+                  <div className="bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
                     <div className="font-semibold">{projection.projectedRemainingUsage.toFixed(0)} kWh</div>
-                    <div className="text-gray-600">Projected Remaining ({projection.remainingDays} days)</div>
+                    <div className="text-gray-600 dark:text-gray-400">Projected Remaining ({projection.remainingDays} days)</div>
                     {projection.weatherBasedDays > 0 && (
                       <div className="text-xs text-purple-600 mt-1">
                         {projection.weatherBasedDays} days weather-based
@@ -707,21 +707,21 @@ export default function CostInsightsTab({
                   <h4 className="font-semibold mb-3">Variable Costs (Usage-Based)</h4>
                   <div className="space-y-2">
                     {variableBreakdown.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                      <div key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded text-sm">
                         <div>
-                          <div className="font-medium">{item.tier}</div>
-                          <div className="text-xs text-gray-600">{item.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{item.tier}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">{item.description}</div>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium">${item.cost.toFixed(2)}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">${item.cost.toFixed(2)}</div>
                           {item.usage && (
-                            <div className="text-xs text-gray-600">{item.usage.toFixed(0)} kWh</div>
+                            <div className="text-xs text-gray-600 dark:text-gray-400">{item.usage.toFixed(0)} kWh</div>
                           )}
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 p-2 bg-blue-100 rounded">
+                  <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
                     <div className="flex justify-between font-semibold text-sm">
                       <span>Total Variable Costs</span>
                       <span>${variableCost.toFixed(2)}</span>
@@ -733,18 +733,18 @@ export default function CostInsightsTab({
                   <h4 className="font-semibold mb-3">Fixed Costs (Monthly)</h4>
                   <div className="space-y-2">
                     {fixedBreakdown.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                      <div key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-800 rounded text-sm">
                         <div>
-                          <div className="font-medium">{item.tier}</div>
-                          <div className="text-xs text-gray-600">{item.description}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{item.tier}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">{item.description}</div>
                         </div>
                         <div className="text-right">
-                          <div className="font-medium">${item.cost.toFixed(2)}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">${item.cost.toFixed(2)}</div>
                         </div>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-2 p-2 bg-blue-100 rounded">
+                  <div className="mt-2 p-2 bg-blue-100 dark:bg-blue-900/30 rounded">
                     <div className="flex justify-between font-semibold text-sm">
                       <span>Total Fixed Costs</span>
                       <span>${fixedCost.toFixed(2)}</span>

@@ -34,8 +34,8 @@ export function AuthFlow() {
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Connecting to ConEd...</p>
-          <p className="mt-2 text-sm text-gray-500">This may take a moment while we check if MFA is required</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Connecting to ConEd...</p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">This may take a moment while we check if MFA is required</p>
         </div>
       </div>
     );
@@ -46,13 +46,13 @@ export function AuthFlow() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Successful!</h2>
-          <p className="text-gray-600">Fetching your electricity data...</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Authentication Successful!</h2>
+          <p className="text-gray-600 dark:text-gray-400">Fetching your electricity data...</p>
         </div>
       </div>
     );
@@ -63,7 +63,7 @@ export function AuthFlow() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <div className="max-w-sm w-full">
-          <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-3 rounded mb-4">
             <p className="font-semibold">Authentication Failed</p>
             <p className="text-sm mt-1">{auth.error || 'An error occurred during authentication'}</p>
           </div>
@@ -81,8 +81,8 @@ export function AuthFlow() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Electricity Usage Tracker</h1>
-        <p className="text-gray-600">Log in with your ConEd account to view your usage</p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Electricity Usage Tracker</h1>
+        <p className="text-gray-600 dark:text-gray-400">Log in with your ConEd account to view your usage</p>
       </div>
 
       {auth.status === null ? (

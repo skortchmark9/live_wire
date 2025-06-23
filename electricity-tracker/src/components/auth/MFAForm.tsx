@@ -50,19 +50,19 @@ export function MFAForm({ onSubmit, onResend, isLoading, error }: MFAFormProps) 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 w-full max-w-sm">
       <div className="text-center">
-        <h2 className="text-xl font-semibold mb-2">Two-Factor Authentication</h2>
-        <p className="text-gray-600">
+        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-gray-100">Two-Factor Authentication</h2>
+        <p className="text-gray-600 dark:text-gray-400">
           Please enter the verification code sent to your phone
         </p>
         {timeRemaining > 0 && (
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
             Time remaining: {formatTime(timeRemaining)}
           </p>
         )}
       </div>
 
       <div>
-        <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="mfaCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Verification Code
         </label>
         <input
@@ -76,24 +76,24 @@ export function MFAForm({ onSubmit, onResend, isLoading, error }: MFAFormProps) 
               message: 'Code must be 6 digits'
             }
           })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg font-mono"
           placeholder="000000"
           disabled={isLoading || timeRemaining === 0}
           maxLength={6}
         />
         {errors.mfaCode && (
-          <p className="mt-1 text-sm text-red-600">{errors.mfaCode.message}</p>
+          <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.mfaCode.message}</p>
         )}
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {timeRemaining === 0 && (
-        <div className="bg-yellow-50 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400 px-4 py-3 rounded">
           The verification code has expired. Please log in again.
         </div>
       )}
@@ -110,7 +110,7 @@ export function MFAForm({ onSubmit, onResend, isLoading, error }: MFAFormProps) 
         <button
           type="button"
           onClick={onResend}
-          className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="w-full py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           Resend Code
         </button>
