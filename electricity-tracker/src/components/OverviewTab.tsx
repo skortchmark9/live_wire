@@ -103,7 +103,7 @@ export default function OverviewTab({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Usage vs Temperature</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={filteredData}>
@@ -145,7 +145,7 @@ export default function OverviewTab({
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Average Usage by Hour of Day</h3>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={hourlyAverages}>
@@ -162,7 +162,7 @@ export default function OverviewTab({
         </div>
 
         {predictions.length > 0 && (
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">24-Hour Usage Prediction</h3>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={predictions}>

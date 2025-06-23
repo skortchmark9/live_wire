@@ -1,7 +1,6 @@
 'use client';
 
 import ElectricityDashboard from '@/components/ElectricityDashboard'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -42,13 +41,10 @@ export default function Home() {
   }
 
   return (
-    <>
-      <ThemeToggle />
-      <main className="container mx-auto p-4">
-        <ErrorBoundary>
-          <ElectricityDashboard />
-        </ErrorBoundary>
-      </main>
-    </>
+    <main className="container mx-auto p-4">
+      <ErrorBoundary>
+        <ElectricityDashboard />
+      </ErrorBoundary>
+    </main>
   )
 }

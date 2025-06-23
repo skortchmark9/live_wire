@@ -330,7 +330,7 @@ export default function CostInsightsTab({
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div className="xl:col-span-2 space-y-6">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Billing Period Usage & Temperature</h3>
           {(() => {
             const billingPeriodData = getBillingPeriodData.map((x) => {
@@ -472,7 +472,7 @@ export default function CostInsightsTab({
                         const data = billingPeriodData[props.index]
                         // Don't render dot if no temperature data
                         if (data.avgTemp === null) {
-                          return <></>
+                          return <circle key={props.index} cx={props.cx} cy={props.cy} r={0} fill="transparent" />
                         }
                         if (data.isForecast) {
                           // Dashed circle for forecast
@@ -516,7 +516,7 @@ export default function CostInsightsTab({
           })()}
         </div>
         
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Select a Model Day</h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Choose a day from the past month to use as the basis for projecting future usage</p>
           {(() => {
@@ -558,7 +558,7 @@ export default function CostInsightsTab({
           })()}
         </div>
         
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
             {(() => {
               if (selectedModelDay) {
@@ -657,7 +657,7 @@ export default function CostInsightsTab({
       </div>
       
       <div className="xl:col-span-1 space-y-6">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
             Billing Period Costs
           </h3>

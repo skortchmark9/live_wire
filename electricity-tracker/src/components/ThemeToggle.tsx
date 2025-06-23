@@ -13,17 +13,21 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <div className="fixed top-4 right-4 p-2 rounded-lg bg-gray-200 dark:bg-gray-800 w-10 h-10" />
+      <div className="p-2 rounded-lg bg-gray-200 dark:bg-gray-800 w-10 h-10" />
     )
   }
 
   return (
     <button
-      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-      className="fixed top-4 right-4 p-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+      onClick={() => {
+        const newTheme = resolvedTheme === 'dark' ? 'light' : 'dark'
+        setTheme(newTheme)
+      }}
+      className="p-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
       aria-label="Toggle theme"
+      title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
     >
-      {resolvedTheme === 'dark' ? (
+        {resolvedTheme === 'dark' ? (
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
         </svg>
