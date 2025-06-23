@@ -27,8 +27,18 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
         </div>
         <div className="flex">
           <button
-            onClick={() => setActiveTab('cost')}
+            onClick={() => setActiveTab('home')}
             className={`flex-1 py-3 px-4 text-center font-medium transition-colors ${
+              activeTab === 'home' 
+                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
+            }`}
+          >
+            Home
+          </button>
+          <button
+            onClick={() => setActiveTab('cost')}
+            className={`flex-1 py-3 px-4 text-center font-medium transition-colors border-l border-gray-200 dark:border-gray-700 ${
               activeTab === 'cost' 
                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -56,6 +66,16 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
             Electricity Usage Dashboard
           </h1>
           <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('home')}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                activeTab === 'home' 
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Home
+            </button>
             <button
               onClick={() => setActiveTab('cost')}
               className={`px-4 py-2 rounded-md transition-colors ${

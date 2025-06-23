@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react'
 import { parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
 import CostInsightsTab from './CostInsightsTab'
+import HomeTab from './HomeTab'
 import { Header } from './Header'
+import { BillingProjectionProvider } from '@/contexts/BillingProjectionContext'
 import { useElectricityData } from '@/hooks/useElectricityData'
 import { useWeatherData } from '@/hooks/useWeatherData'
 // import { usePredictionsData } from '@/hooks/usePredictionsData' // unused import
@@ -31,7 +33,7 @@ export default function ElectricityDashboard() {
   // Compute overall loading and error states
   const loading = electricityLoading || weatherLoading
   const error = electricityError || weatherError
-  const [activeTab, setActiveTab] = useState<ActiveTab>('cost')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('home')
 
   // Process electricity data
   useEffect(() => {
@@ -125,20 +127,24 @@ export default function ElectricityDashboard() {
     <div className="space-y-6">
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab === 'disaggregation' ? (
-        <LoadDisaggregation electricityData={electricityData} loading={loading} />
-      ) : activeTab === 'cost' ? (
-        <CostInsightsTab
-          combinedData={combinedData}
-          conedForecast={conedForecast}
-          weatherData={weatherData.map(item => ({
-            time: item.timestamp,
-            temperature_2m: item.temperature_f || 0,
-            relative_humidity_2m: item.humidity_percent || 0,
-            weather_code: 0
-          }))}
-        />
-      ) : null}
+      <BillingProjectionProvider
+        combinedData={combinedData}
+        conedForecast={conedForecast}
+        weatherData={weatherData.map(item => ({
+          time: item.timestamp,
+          temperature_2m: item.temperature_f || 0,
+          relative_humidity_2m: item.humidity_percent || 0,
+          weather_code: 0
+        }))}
+      >
+        {activeTab === 'home' ? (
+          <HomeTab electricityData={electricityData} />
+        ) : activeTab === 'disaggregation' ? (
+          <LoadDisaggregation electricityData={electricityData} loading={loading} />
+        ) : activeTab === 'cost' ? (
+          <CostInsightsTab />
+        ) : null}
+      </BillingProjectionProvider>
     </div>
   )
 }
