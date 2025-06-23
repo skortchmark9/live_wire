@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar } from 'recharts'
+import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar, ReferenceLine } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { useWeatherData } from '@/hooks/useWeatherData'
+import { useWeatherData, downsampleWeatherTo15Minutes } from '@/hooks/useWeatherData'
 import { calculateUsageCost } from '@/utils/costCalculations'
+import { calculateBaseline, detectACEvents } from '@/utils/loadAnalysis'
 
 interface ElectricityDataPoint {
   start_time: string
@@ -37,6 +38,7 @@ interface LoadDisaggregationProps {
 export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
   const [detectedAC, setDetectedAC] = useState<ACUsage[]>([])
   const [selectedTimeRange, setSelectedTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
+  const [baselineWatts, setBaselineWatts] = useState<number>(0)
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
 
   const analyzeACUsage = useCallback((data: ElectricityDataPoint[], weather: WeatherDataPoint[]) => {
@@ -45,7 +47,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
     const cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
     
-    // Filter recent data and convert to watts
+    // Filter recent data and convert to watts, assuming 15-minute intervals
     const recentData = data
       .filter(d => d.consumption_kwh !== null && new Date(d.start_time) >= cutoff)
       .map(d => ({
@@ -57,26 +59,52 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
     if (recentData.length === 0) return
 
-    // Create weather lookup map with more flexible timestamp matching
-    const weatherMap = new Map()
-    weather.forEach(w => {
-      // Store both exact timestamp and rounded timestamp for better matching
-      weatherMap.set(w.timestamp, w.temperature_f)
-      // Also try storing with rounded time to nearest 15 minutes
-      const roundedTime = new Date(w.timestamp)
-      roundedTime.setMinutes(Math.floor(roundedTime.getMinutes() / 15) * 15, 0, 0)
-      weatherMap.set(roundedTime.toISOString(), w.temperature_f)
-    })
+    // Downsample weather data to 15-minute intervals
+    const downsampledWeather = downsampleWeatherTo15Minutes(weather)
     
+    // Create weather lookup map with downsampled data
+    const weatherMap = new Map()
+    downsampledWeather.forEach(w => {
+      weatherMap.set(w.timestamp, w.temperature_f)
+    })
+    console.log(weatherMap);
 
-    // Calculate baseline usage (25th percentile)
-    const allWatts = recentData.map(d => d.watts)
-    const sortedWatts = [...allWatts].sort((a, b) => a - b)
-    const baselineWatts = sortedWatts[Math.floor(sortedWatts.length * 0.25)]
+    // Calculate baseline usage
+    const baseline = calculateBaseline(recentData)
+    setBaselineWatts(baseline)
 
     // Detect AC usage
-    detectACUsage(recentData, weatherMap, baselineWatts, acUsage)
-    setDetectedAC(acUsage)
+    const acEvents = detectACEvents(recentData, baseline)
+    
+    // Convert events to ACUsage format with weather data
+    const acUsageList: ACUsage[] = acEvents.map(event => {
+      const duration = event.endIndex - event.startIndex + 1
+      const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000 // 15-minute intervals
+      
+      // Get temperature for this event
+      const temperature = weatherMap.get(recentData[event.startIndex].timestamp) || undefined
+      
+      // Calculate confidence
+      let confidence = 0.6
+      if (temperature && temperature > 75) {
+        confidence += 0.2
+        if (temperature > 85) confidence += 0.1
+      }
+      if (event.avgExcessWatts > 500) confidence += 0.1
+      if (event.avgExcessWatts > 1000) confidence += 0.1
+      
+      return {
+        startTime: recentData[event.startIndex].timestamp,
+        endTime: recentData[event.endIndex].timestamp,
+        peakWatts: event.peakWatts,
+        estimatedKwh,
+        estimatedCost: calculateUsageCost(estimatedKwh),
+        avgTemperature: temperature,
+        confidence: Math.min(confidence, 0.95)
+      }
+    })
+    
+    setDetectedAC(acUsageList)
   }, [selectedTimeRange])
 
   useEffect(() => {
@@ -84,64 +112,6 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       analyzeACUsage(electricityData, weatherData.data)
     }
   }, [selectedTimeRange, electricityData, weatherData, analyzeACUsage])
-
-  const detectACUsage = (
-    data: Array<{timestamp: string, watts: number}>, 
-    weatherMap: Map<string, number>, 
-    baseline: number, 
-    acUsage: ACUsage[]
-  ) => {
-    for (let i = 0; i < data.length - 2; i++) {
-      const current = data[i].watts
-      const excess = current - baseline
-      
-      // Look for significant spikes that could be AC (200W+ above baseline)
-      if (excess >= 200) {
-        // const temperature = getTemperatureForTimestamp(data[i].timestamp, weatherMap)
-        const temperature = 80;
-
-        // Find end of spike
-        let endIndex = i
-        let peakWatts = current
-        for (let j = i + 1; j < Math.min(i + 24, data.length); j++) { // Up to 6 hours
-          if (data[j].watts > peakWatts) peakWatts = data[j].watts
-          if (data[j].watts < baseline + excess * 0.6) {
-            endIndex = j - 1
-            break
-          }
-          endIndex = j
-        }
-        
-        if (endIndex > i) { // At least 15 minutes
-          let confidence = 0.6
-          
-          // Higher confidence if temperature is available and hot
-          if (temperature && temperature > 75) {
-            confidence += 0.2
-            if (temperature > 85) confidence += 0.1
-          }
-          
-          // Higher confidence for very high usage spikes
-          if (excess > 500) confidence += 0.1
-          if (excess > 1000) confidence += 0.1
-          
-          const duration = endIndex - i + 1
-          const estimatedKwh = (excess * duration * 0.25) / 1000 // Use excess watts - just the AC portion
-          acUsage.push({
-            startTime: data[i].timestamp,
-            endTime: data[endIndex].timestamp,
-            peakWatts,
-            estimatedKwh,
-            estimatedCost: calculateUsageCost(estimatedKwh),
-            avgTemperature: temperature,
-            confidence: Math.min(confidence, 0.95)
-          })
-          
-          i = endIndex // Skip ahead
-        }
-      }
-    }
-  }
 
 
   const getChartData = useMemo(() => {
@@ -159,20 +129,13 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       }))
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
-    // Build optimized weather lookup - pre-sorted array for binary search
-    const weatherLookup: Array<{timestamp: number, temperature: number}> = []
+    // Build optimized weather lookup with downsampled data
+    const weatherLookup = new Map<string, number>()
     if (weatherData?.data) {
-      weatherData.data.forEach(w => {
-        const time = new Date(w.timestamp).getTime()
-        weatherLookup.push({timestamp: time, temperature: w.temperature_f})
-        
-        // Also add rounded timestamps for better matching
-        const roundedTime = new Date(w.timestamp)
-        roundedTime.setMinutes(Math.floor(roundedTime.getMinutes() / 15) * 15, 0, 0)
-        weatherLookup.push({timestamp: roundedTime.getTime(), temperature: w.temperature_f})
+      const downsampledWeather = downsampleWeatherTo15Minutes(weatherData.data)
+      downsampledWeather.forEach(w => {
+        weatherLookup.set(w.timestamp, w.temperature_f)
       })
-      // Sort for binary search
-      weatherLookup.sort((a, b) => a.timestamp - b.timestamp)
     }
 
 
@@ -195,8 +158,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       const pointTime = new Date(d.timestamp).getTime()
       return {
         ...d,
-        // temperature: getTemperature(d.timestamp),
-        temperature: 80,
+        temperature: weatherLookup.get(d.timestamp) || undefined,
         AC: acTimestamps.has(pointTime) ? 1 : null // Binary indicator - only show when AC is active
       }
     })
@@ -324,6 +286,15 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
               dot={false}
               connectNulls={false}
               name="AC Usage"
+            />
+            
+            {/* Baseline reference line */}
+            <ReferenceLine 
+              yAxisId="left"
+              y={baselineWatts} 
+              stroke="#10b981" 
+              strokeDasharray="5 5"
+              label={{ value: "Baseline", position: "insideTopRight" }}
             />
           </ComposedChart>
         </ResponsiveContainer>
