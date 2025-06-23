@@ -17,65 +17,6 @@ interface CostInsightsTabProps {
   }> // Add weather data to access forecast
 }
 
-// Helper component for bill projection display
-function BillProjection({ 
-  projection, 
-  conedForecast, 
-  isDesktop = false 
-}: { 
-  projection: {
-    monthToDateUsage: number;
-    projectedRemainingUsage: number;
-    totalProjectedUsage: number;
-    remainingDays: number;
-    weatherBasedDays: number;
-  }, 
-  conedForecast: ConEdForecast | null, 
-  isDesktop?: boolean 
-}) {
-  const { variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
-  
-  return (
-    <div className="space-y-4">
-      <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-        <div className="text-center">
-          <div className={`font-bold text-green-600 ${isDesktop ? 'text-2xl' : 'text-3xl sm:text-4xl'}`}>
-            ${(variableCost + fixedCost).toFixed(2)}
-          </div>
-          <div className="text-gray-600 dark:text-gray-400 font-medium">Projected Bill</div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {projection.totalProjectedUsage.toFixed(0)} kWh total usage
-          </div>
-          {conedForecast && (
-            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div className='grid grid-cols-2 gap-2'>
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
-          <div className={`font-semibold ${isDesktop ? '' : 'text-lg'}`}>
-            {projection.monthToDateUsage.toFixed(0)} kWh
-          </div>
-          <div className="text-gray-600 dark:text-gray-400 text-sm">
-            Used So Far
-          </div>
-        </div>
-        <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded">
-          <div className={`font-semibold ${isDesktop ? '' : 'text-lg'}`}>
-            {projection.projectedRemainingUsage.toFixed(0)} kWh
-          </div>
-          <div className="text-gray-600 dark:text-gray-400 text-sm">
-            Remaining
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function CostInsightsTab({
   combinedData,
   conedForecast,
@@ -394,24 +335,30 @@ export default function CostInsightsTab({
   }, [selectedModelDay, getLastMonthData])
 
 
+  // Extract just the green projection box for sticky header
+  const projection = getModelDayProjection
+  const { variableCost, fixedCost } = calculateCostBreakdown(projection.totalProjectedUsage)
+
   return (
-    <div className="space-y-4 lg:space-y-6">
-      {/* Mobile-only Bill Projection at top */}
-      <div className="xl:hidden bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
-        <h3 className="text-base sm:text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
-          Billing Period Projection
-        </h3>
-        {conedForecast && (
-          <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {format(parseISO(conedForecast.bill_start_date), 'MMM dd')} - {format(parseISO(conedForecast.bill_end_date), 'MMM dd, yyyy')}
+    <div className="relative">
+      {/* Sticky Bill Projection - mobile only */}
+      <div className="xl:hidden sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 pb-4 -mx-2 sm:-mx-4 px-2 sm:px-4">
+        <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg shadow-lg">
+          <div className="flex flex-col text-center align-center">
+            <div className="text-3xl sm:text-4xl font-bold text-green-600">
+              ${(variableCost + fixedCost).toFixed(2)}
+            </div>
+            <div className='flex items-center gap-2'>
+              <div className="text-gray-600 dark:text-gray-400 font-small">Projected Bill:</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {projection.totalProjectedUsage.toFixed(0)} kWh total usage
+              </div>
+            </div>
           </div>
-        )}
-        <BillProjection 
-          projection={getModelDayProjection} 
-          conedForecast={conedForecast} 
-          isDesktop={false} 
-        />
+        </div>
       </div>
+
+      <div className="space-y-4 lg:space-y-6">
 
       {/* Charts and controls */}
       <div className="lg:grid lg:grid-cols-1 xl:grid-cols-4 lg:gap-6 space-y-4 lg:space-y-0">
@@ -741,21 +688,64 @@ export default function CostInsightsTab({
         
         {/* Desktop Sidebar */}
         <div className="xl:col-span-1 space-y-4 lg:space-y-6">
-          {/* Bill Projection - Desktop only */}
-          <div className="hidden xl:block bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+          {/* Bill Projection - Desktop only, sticky within sidebar */}
+          <div className="hidden xl:block sticky top-4">
+            <div className="bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
             <h3 className="text-base sm:text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
               Billing Period Projection
+            </h3>
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  ${(variableCost + fixedCost).toFixed(2)}
+                </div>
+                <div className="text-gray-600 dark:text-gray-400">Projected Bill</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {projection.totalProjectedUsage.toFixed(0)} kWh total usage
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          {/* Billing Period Details */}
+          <div className="bg-white dark:bg-gray-800 p-3 sm:p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+            <h3 className="text-base sm:text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
+              Billing Period Details
             </h3>
             {conedForecast && (
               <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {format(parseISO(conedForecast.bill_start_date), 'MMM dd')} - {format(parseISO(conedForecast.bill_end_date), 'MMM dd, yyyy')}
               </div>
             )}
-            <BillProjection 
-              projection={getModelDayProjection} 
-              conedForecast={conedForecast} 
-              isDesktop={true} 
-            />
+            <div className='grid grid-cols-2 xl:grid-cols-1 gap-2'>
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+                <div className="font-semibold text-lg">
+                  {projection.monthToDateUsage.toFixed(0)} kWh
+                </div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm">
+                  Used So Far
+                </div>
+              </div>
+              <div className="bg-orange-50 dark:bg-orange-900/20 p-3 rounded">
+                <div className="font-semibold text-lg">
+                  {projection.projectedRemainingUsage.toFixed(0)} kWh
+                </div>
+                <div className="text-gray-600 dark:text-gray-400 text-sm">
+                  Remaining
+                </div>
+                {projection.weatherBasedDays > 0 && (
+                  <div className="text-xs text-purple-600 mt-1">
+                    {projection.weatherBasedDays} days weather-based
+                  </div>
+                )}
+              </div>
+            </div>
+            {conedForecast && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                ConEd&apos;s forecast: {(conedForecast.usage_to_date + conedForecast.forecasted_usage).toFixed(0)} kWh
+              </div>
+            )}
           </div>
 
           {/* Detailed Cost Breakdown */}
@@ -824,6 +814,7 @@ export default function CostInsightsTab({
             })()}
           </div>
         </div>
+      </div>
       </div>
     </div>
   )
