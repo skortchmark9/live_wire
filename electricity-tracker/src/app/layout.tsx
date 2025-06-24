@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Electricity Tracker",
-  description: "For ConEdison customers in New York City",
+  title: "tracy.ac - Energy Insights",
+  description: "Energy insights for ConEdison customers in New York City",
 };
 
 export default function RootLayout({

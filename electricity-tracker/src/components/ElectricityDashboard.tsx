@@ -138,7 +138,7 @@ export default function ElectricityDashboard() {
         }))}
       >
         {activeTab === 'home' ? (
-          <HomeTab electricityData={electricityData} />
+          <HomeTab electricityData={electricityData} setActiveTab={setActiveTab} />
         ) : activeTab === 'disaggregation' ? (
           <LoadDisaggregation electricityData={electricityData} loading={loading} />
         ) : activeTab === 'cost' ? (

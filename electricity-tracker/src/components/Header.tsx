@@ -16,9 +16,12 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
       <div className="block sm:hidden">
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              Electricity Dashboard
-            </h1>
+            <div className="flex items-center gap-2">
+              <img src="/logo.svg" alt="tracy.ac" className="w-6 h-6" />
+              <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                tracy.ac
+              </h1>
+            </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
               <LogoutButton />
@@ -62,9 +65,12 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
       {/* Desktop Layout */}
       <div className="hidden sm:flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-8">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-            Electricity Usage Dashboard
-          </h1>
+          <div className="flex items-center gap-3">
+            <img src="/logo.svg" alt="tracy.ac" className="w-8 h-8" />
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              tracy.ac
+            </h1>
+          </div>
           <div className="flex gap-1">
             <button
               onClick={() => setActiveTab('home')}

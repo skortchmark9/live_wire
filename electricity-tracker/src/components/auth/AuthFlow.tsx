@@ -81,7 +81,7 @@ export function AuthFlow() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Electricity Usage Tracker</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">tracy.ac</h1>
         <p className="text-gray-600 dark:text-gray-400">Log in with your ConEd account to view your usage</p>
       </div>
 

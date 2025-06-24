@@ -58,4 +58,4 @@ export interface CostBreakdown {
 }
 
 export type TimeRange = '7d' | '30d' | '1d'
-export type ActiveTab = 'home' | 'overview' | 'disaggregation' | 'cost'
+export type ActiveTab = 'home' | 'disaggregation' | 'cost'

@@ -3,14 +3,15 @@
 import { useState, useEffect } from 'react';
 import { calculateUsageCost } from '@/utils/costCalculations';
 import { calculateBaseline, detectACEvents } from '@/utils/loadAnalysis';
-import { ElectricityDataPoint } from './types';
+import { ActiveTab, ElectricityDataPoint } from './types';
 import { useBillingProjection } from '@/contexts/BillingProjectionContext';
 
 interface HomeTabProps {
   electricityData: ElectricityDataPoint[];
+  setActiveTab: (tab: ActiveTab) => void;
 }
 
-export default function HomeTab({ electricityData }: HomeTabProps) {
+export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps) {
   const [displayUnit, setDisplayUnit] = useState<'$' | 'kWh'>('$');
   const [yesterdayUsage, setYesterdayUsage] = useState<number>(0);
   const [acCostKwh, setAcCostKwh] = useState<number>(0);
@@ -75,11 +76,8 @@ export default function HomeTab({ electricityData }: HomeTabProps) {
     <div className="space-y-8">
       <div className="text-center space-y-4">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Your Electricity at a Glance
+          Trace your electricity usage!
         </h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400">
-          Key insights about your energy usage
-        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -92,7 +90,8 @@ export default function HomeTab({ electricityData }: HomeTabProps) {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-2xl p-6 text-center">
+        <button onClick={() => setActiveTab('cost')}
+              className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-2xl p-6 text-center">
           <div className="text-sm font-medium text-green-600 dark:text-green-400 mb-2">
             {displayUnit === '$' ? 'Projected Monthly Bill' : 'Projected Monthly Usage'}
           </div>
@@ -102,16 +101,17 @@ export default function HomeTab({ electricityData }: HomeTabProps) {
               : `${(projection?.totalProjectedUsage || 0).toFixed(0)} kWh`
             }
           </div>
-        </div>
+        </button>
 
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-2xl p-6 text-center">
+        <button onClick={() => setActiveTab('disaggregation')} 
+            className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-2xl p-6 text-center">
           <div className="text-sm font-medium text-orange-600 dark:text-orange-400 mb-2">
-            AC Cost Yesterday
+            AC {displayUnit === '$' ? 'Cost' : 'Usage'} Yesterday
           </div>
           <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
             {formatValue(acCostKwh)}
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="flex items-center justify-center">
