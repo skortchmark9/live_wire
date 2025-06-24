@@ -1,13 +1,10 @@
-import aiohttp
-import sys
-from pathlib import Path
+from cachetools import TTLCache
+import asyncio
 from user import auth_manager
 from weather import update_weather_data, get_stored_weather_data
 import asyncio
-import json
 import os
-import uuid
-from datetime import datetime, timedelta, date
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 import logging
@@ -30,6 +27,27 @@ logger = logging.getLogger(__name__)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
+
+# Thread-safe TTL cache for demo data (15 minute TTL, max 1 item)
+demo_cache = TTLCache(maxsize=1, ttl=900)  # 15 minutes = 900 seconds
+
+async def get_cached_demo_data():
+    """Get demo data with caching"""
+    cache_key = "demo_data"
+    
+    if cache_key in demo_cache:
+        logger.info("Returning cached demo data")
+        return demo_cache[cache_key]
+    
+    logger.info("Cache miss - fetching fresh demo data from ConEd")
+    async with get_demo_api() as api:
+        result = await collect_electricity_data(api)
+    
+    if result:
+        demo_cache[cache_key] = result
+        logger.info("Demo data cached for 15 minutes")
+    
+    return result
 
 async def periodic_weather_update():
     """Periodically update weather data"""
@@ -210,24 +228,25 @@ async def get_electricity_data_combined(
     if not session_id and not is_demo:
         raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
     
-    get_api_ctx = get_demo_api
-    
-    if not is_demo:
-        # Get the session
+    if is_demo:
+        # Use cached demo data
+        try:
+            result = await get_cached_demo_data()
+        except opower_exceptions.ApiException as e:
+            raise HTTPException(status_code=e.status, detail=f"Failed to collect demo electricity data: {str(e)}")
+    else:
+        # Regular user flow
         session = auth_manager.get_session(session_id)
         if not session or session["status"] != "success":
             raise HTTPException(status_code=401, detail="Session expired. Please login again.")
         if not session.get('access_token'):
             raise HTTPException(status_code=401, detail="No access token.")
         
-        get_api_ctx = lambda: get_user_api(session['username'], session['password'], session['access_token'])
-
-    # Use the context manager to get API instance
-    try:
-        async with get_api_ctx() as api:
-            result = await collect_electricity_data(api)
-    except opower_exceptions.ApiException as e:
-        raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
+        try:
+            async with get_user_api(session['username'], session['password'], session['access_token']) as api:
+                result = await collect_electricity_data(api)
+        except opower_exceptions.ApiException as e:
+            raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
     
     if not result:
         raise HTTPException(status_code=500, detail="Failed to collect electricity data")

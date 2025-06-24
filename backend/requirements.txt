@@ -5,6 +5,7 @@ aiohttp==3.10.11
 requests==2.32.3
 pytz==2023.3
 slowapi==0.1.9
+cachetools
 
 # Install patched version of opower
 -e ./opower
