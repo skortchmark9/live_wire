@@ -93,7 +93,7 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
         <button onClick={() => setActiveTab('cost')}
               className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-2xl p-6 text-center">
           <div className="text-sm font-medium text-green-600 dark:text-green-400 mb-2">
-            {displayUnit === '$' ? 'Projected Monthly Bill' : 'Projected Monthly Usage'}
+            {displayUnit === '$' ? 'Projected Bill' : 'Projected Usage'}
           </div>
           <div className="text-3xl font-bold text-green-900 dark:text-green-100">
             {displayUnit === '$' 
@@ -111,6 +111,11 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
           <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
             {formatValue(acCostKwh)}
           </div>
+          {yesterdayUsage > 0 && (
+            <div className="text-sm text-orange-700 dark:text-orange-300 mt-1">
+              ({((acCostKwh / yesterdayUsage) * 100).toFixed(1)}% of total)
+            </div>
+          )}
         </button>
       </div>
 

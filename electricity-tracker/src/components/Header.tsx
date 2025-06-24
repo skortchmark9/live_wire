@@ -67,7 +67,7 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
       <div className="hidden sm:flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
-            <Image src="/logo.svg" alt="tracy.ac" className="w-8 h-8" />
+            <Image src="/logo.svg" alt="tracy.ac" className="w-8 h-8" width={32} height={32} />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               tracy.ac
             </h1>

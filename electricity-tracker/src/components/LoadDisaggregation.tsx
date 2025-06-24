@@ -226,11 +226,32 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
   // Calculate total usage for the selected period
   const now = new Date()
-  const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
-  const cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+  let cutoff: Date
+  let endTime: Date = now
+  
+  if (selectedTimeRange === 'yesterday') {
+    // Get yesterday's date range (midnight to midnight)
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(0, 0, 0, 0)
+    cutoff = yesterday
+    
+    endTime = new Date(yesterday)
+    endTime.setDate(endTime.getDate() + 1)
+  } else {
+    const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+    cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+  }
   
   const totalPeriodKwh = electricityData
-    .filter(d => d.consumption_kwh !== null && new Date(d.start_time) >= cutoff)
+    .filter(d => {
+      if (d.consumption_kwh === null) return false
+      const startTime = new Date(d.start_time)
+      if (selectedTimeRange === 'yesterday') {
+        return startTime >= cutoff && startTime < endTime
+      }
+      return startTime >= cutoff
+    })
     .reduce((sum, d) => sum + (d.consumption_kwh || 0), 0)
   
   const acPercentage = totalPeriodKwh > 0 ? (totalDetectedKwh / totalPeriodKwh) * 100 : 0
