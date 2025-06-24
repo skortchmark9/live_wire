@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "tracy.ac - Energy Insights",
   description: "Energy insights for ConEdison customers in New York City",
+  metadataBase: new URL(
+    process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : 'http://localhost:3000'
+  ),
   openGraph: {
     title: "tracy.ac - Energy Insights",
     description: "Energy insights for ConEdison customers in New York City",
