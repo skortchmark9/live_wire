@@ -37,7 +37,7 @@ export default function CostInsightsTab() {
         if (scrollContainerRef.current) {
           const selectedButton = scrollContainerRef.current.querySelector(`[data-date="${selectedModelDay}"]`)
           if (selectedButton) {
-            selectedButton.scrollIntoView({ block: 'nearest', inline: 'center' })
+            selectedButton.scrollIntoView({ inline: 'center', block: 'nearest' })
           }
         }
       }, 100)
@@ -60,7 +60,7 @@ export default function CostInsightsTab() {
             <div className="text-3xl sm:text-4xl font-bold text-green-600">
               ${(variableCost + fixedCost).toFixed(2)}
             </div>
-            <div className='flex items-center gap-2'>
+            <div className='flex items-center justify-center gap-2'>
               <div className="text-gray-600 dark:text-gray-400 font-small">Projected Bill:</div>
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 {projection?.totalProjectedUsage.toFixed(0) || 0} kWh total usage

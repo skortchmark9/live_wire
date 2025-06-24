@@ -37,18 +37,39 @@ interface LoadDisaggregationProps {
 
 export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
   const [detectedAC, setDetectedAC] = useState<ACUsage[]>([])
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'24h' | '7d' | '30d'>('24h')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<'yesterday' | '24h' | '7d' | '30d'>('yesterday')
   const [baselineWatts, setBaselineWatts] = useState<number>(0)
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
 
   const analyzeACUsage = useCallback((data: ElectricityDataPoint[], weather: WeatherDataPoint[]) => {
     const now = new Date()
-    const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
-    const cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+    let cutoff: Date
+    let endTime: Date = now
+    
+    if (selectedTimeRange === 'yesterday') {
+      // Get yesterday's date range (midnight to midnight)
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      yesterday.setHours(0, 0, 0, 0)
+      cutoff = yesterday
+      
+      endTime = new Date(yesterday)
+      endTime.setDate(endTime.getDate() + 1)
+    } else {
+      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+      cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+    }
     
     // Filter recent data and convert to watts, assuming 15-minute intervals
     const recentData = data
-      .filter(d => d.consumption_kwh !== null && new Date(d.start_time) >= cutoff)
+      .filter(d => {
+        if (d.consumption_kwh === null) return false
+        const startTime = new Date(d.start_time)
+        if (selectedTimeRange === 'yesterday') {
+          return startTime >= cutoff && startTime < endTime
+        }
+        return startTime >= cutoff
+      })
       .map(d => ({
         timestamp: d.start_time,
         watts: (d.consumption_kwh! * 1000) / 0.25, // Convert kWh to W (15min intervals)
@@ -115,12 +136,33 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
   const getChartData = useMemo(() => {
     const now = new Date()
-    const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
-    const cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+    let cutoff: Date
+    let endTime: Date = now
+    
+    if (selectedTimeRange === 'yesterday') {
+      // Get yesterday's date range (midnight to midnight)
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      yesterday.setHours(0, 0, 0, 0)
+      cutoff = yesterday
+      
+      endTime = new Date(yesterday)
+      endTime.setDate(endTime.getDate() + 1)
+    } else {
+      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+      cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
+    }
     
     // Get data for selected time range
     const recentData = electricityData
-      .filter(d => d.consumption_kwh !== null && new Date(d.start_time) >= cutoff)
+      .filter(d => {
+        if (d.consumption_kwh === null) return false
+        const startTime = new Date(d.start_time)
+        if (selectedTimeRange === 'yesterday') {
+          return startTime >= cutoff && startTime < endTime
+        }
+        return startTime >= cutoff
+      })
       .map(d => ({
         timestamp: d.start_time,
         watts: (d.consumption_kwh! * 1000) / 0.25, // Convert kWh to W (15min intervals)
@@ -153,7 +195,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     })
 
     // Combine actual data with AC detections and weather
-    return recentData.map(d => {
+    const chartData = recentData.map(d => {
       const pointTime = new Date(d.timestamp).getTime()
       return {
         ...d,
@@ -161,6 +203,39 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         AC: acTimestamps.has(pointTime) ? 1 : null // Binary indicator - only show when AC is active
       }
     })
+    
+    // For 24h view, ensure we show the full 24 hours even if data is missing
+    if (selectedTimeRange === '24h' && chartData.length > 0) {
+      // If there's a gap at the end (due to 2hr delay), fill with weather-only data
+      const lastDataTime = new Date(chartData[chartData.length - 1].timestamp).getTime()
+      const targetEndTime = now.getTime()
+      
+      if (targetEndTime - lastDataTime > 15 * 60 * 1000) { // More than 15 minutes gap
+        // Get all available weather data for the gap period
+        if (weatherData?.data) {
+          const downsampledWeather = downsampleWeatherTo15Minutes(weatherData.data)
+          
+          // Add weather-only points for the gap
+          let currentTime = lastDataTime + 15 * 60 * 1000
+          while (currentTime <= targetEndTime) {
+            const timestamp = new Date(currentTime).toISOString()
+            const temp = weatherLookup.get(timestamp)
+            
+            chartData.push({
+              timestamp,
+              watts: null,
+              kwh: null,
+              temperature: temp,
+              AC: null
+            })
+            
+            currentTime += 15 * 60 * 1000
+          }
+        }
+      }
+    }
+    
+    return chartData
   }, [selectedTimeRange, electricityData, weatherData, detectedAC])
 
   if (loading || weatherLoading) {
@@ -191,7 +266,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
         <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">AC Usage Analysis</h2>
         <div className="flex gap-1 sm:gap-2 sm:ml-auto">
-          {(['24h', '7d', '30d'] as const).map(range => (
+          {(['yesterday', '24h', '7d', '30d'] as const).map(range => (
             <button
               key={range}
               onClick={() => setSelectedTimeRange(range)}
@@ -199,14 +274,14 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
                 selectedTimeRange === range ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
               }`}
             >
-              {range === '24h' ? 'Last 24h' : range === '7d' ? 'Last 7 days' : 'Last 30 days'}
+              {range === 'yesterday' ? 'Yesterday' : range === '24h' ? 'Last 24h' : range === '7d' ? 'Last 7 days' : 'Last 30 days'}
             </button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
-        <div className="text-center p-2 sm:p-3 bg-red-50 dark:bg-red-900/20 rounded">
+        <div className="hidden sm:block text-center p-2 sm:p-3 bg-red-50 dark:bg-red-900/20 rounded">
           <div className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400">{detectedAC.length}</div>
           <div className="text-xs text-gray-600 dark:text-gray-300">Events</div>
         </div>
@@ -222,7 +297,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
           <div className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{acPercentage.toFixed(1)}%</div>
           <div className="text-xs text-gray-600 dark:text-gray-300">of Total</div>
         </div>
-        <div className="text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-900/20 rounded">
+        <div className="hidden sm:block text-center p-2 sm:p-3 bg-orange-50 dark:bg-orange-900/20 rounded">
           <div className="text-base sm:text-lg font-bold text-orange-600 dark:text-orange-400">{avgTemp.toFixed(0)}°F</div>
           <div className="text-xs text-gray-600 dark:text-gray-300">Avg Temp</div>
         </div>
@@ -237,7 +312,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
               dataKey="timestamp"
               tickFormatter={(value) => {
                 const date = parseISO(value)
-                if (selectedTimeRange === '24h') return format(date, 'HH:mm')
+                if (selectedTimeRange === 'yesterday' || selectedTimeRange === '24h') return format(date, 'HH:mm')
                 if (selectedTimeRange === '7d') return format(date, 'MMM dd')
                 return format(date, 'MMM dd')
               }}
