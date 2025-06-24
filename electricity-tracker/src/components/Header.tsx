@@ -1,7 +1,6 @@
 'use client'
 
 import { ThemeToggle } from './ThemeToggle'
-import { LogoutButton } from './auth/LogoutButton'
 import { ActiveTab } from './types'
 import Image from 'next/image'
 import { useState } from 'react'
@@ -176,7 +175,7 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
               </div>
               <div className="space-y-4 text-gray-700 dark:text-gray-300">
                 <p>
-                  Hi! I'm Sam, developer of tracy.ac.
+                  Hi! I&apos;m Sam, developer of tracy.ac.
                 </p>
                 <div>
                   <p className="mb-3">Many assumptions were made in making this:</p>
@@ -187,7 +186,7 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
                   </ul>
                 </div>
                 <p className="text-sm">
-                  If you've got issues, questions, or feedback about the app, you can text me at{' '}
+                  If you&apos;ve got issues, questions, or feedback about the app, you can text me at{' '}
                   <span className="font-medium text-blue-600 dark:text-blue-400">516 417 2472</span>.
                 </p>
               </div>
