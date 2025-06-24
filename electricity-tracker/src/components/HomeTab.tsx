@@ -85,7 +85,7 @@ export default function HomeTab({ electricityData }: HomeTabProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-2xl p-6 text-center">
           <div className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-2">
-            Yesterday's Electricity
+            Yesterday&apos;s Electricity
           </div>
           <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
             {formatValue(yesterdayUsage)}

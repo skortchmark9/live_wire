@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useCallback, useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
 import { CombinedDataPoint } from './types'
@@ -22,12 +22,6 @@ export default function CostInsightsTab() {
   } = useBillingProjection();
   
   const [hoveredDay, setHoveredDay] = useState<string | null>(null)
-
-  // Get model day usage for the selected day
-  const getModelDayUsage = useMemo(() => {
-    const selectedDayData = dailyDataBuckets.get(selectedModelDay) || []
-    return selectedDayData.reduce((sum, d) => sum + d.consumption_kwh, 0)
-  }, [selectedModelDay, dailyDataBuckets])
 
   const getSelectedDayData = useMemo(() => {
     return (selectedDate: string) => {
