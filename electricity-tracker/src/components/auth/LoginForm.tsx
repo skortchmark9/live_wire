@@ -82,7 +82,7 @@ export function LoginForm({ onSubmit, onDemoLogin, isLoading, error }: LoginForm
           onClick={onDemoLogin}
           className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
         >
-          No account? Demo with Sam's data
+          No account? Demo with Sam&apos;s data
         </button>
       </div>
     </form>
