@@ -3,6 +3,7 @@
 import { ThemeToggle } from './ThemeToggle'
 import { LogoutButton } from './auth/LogoutButton'
 import { ActiveTab } from './types'
+import Image from 'next/image'
 
 interface HeaderProps {
   activeTab: ActiveTab
@@ -17,9 +18,9 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
         <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src="/logo.svg" alt="tracy.ac" className="w-5 h-5" />
+              <Image src="/logo.svg" alt="tracy.ac" className="w-5 h-5" width={20} height={20} />
               <h1 className="text-base font-bold text-gray-900 dark:text-gray-100">
-                tracy.ac
+              tracy.ac
               </h1>
             </div>
             <div className="flex items-center gap-2">
@@ -66,7 +67,7 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
       <div className="hidden sm:flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
-            <img src="/logo.svg" alt="tracy.ac" className="w-8 h-8" />
+            <Image src="/logo.svg" alt="tracy.ac" className="w-8 h-8" />
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
               tracy.ac
             </h1>

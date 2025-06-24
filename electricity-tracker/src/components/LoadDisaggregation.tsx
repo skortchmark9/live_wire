@@ -87,7 +87,6 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     downsampledWeather.forEach(w => {
       weatherMap.set(w.timestamp, w.temperature_f)
     })
-    console.log(weatherMap);
 
     // Calculate baseline usage
     const baseline = calculateBaseline(recentData)
@@ -204,36 +203,12 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       }
     })
     
-    // For 24h view, ensure we show the full 24 hours even if data is missing
-    if (selectedTimeRange === '24h' && chartData.length > 0) {
-      // If there's a gap at the end (due to 2hr delay), fill with weather-only data
-      const lastDataTime = new Date(chartData[chartData.length - 1].timestamp).getTime()
-      const targetEndTime = now.getTime()
-      
-      if (targetEndTime - lastDataTime > 15 * 60 * 1000) { // More than 15 minutes gap
-        // Get all available weather data for the gap period
-        if (weatherData?.data) {
-          const downsampledWeather = downsampleWeatherTo15Minutes(weatherData.data)
-          
-          // Add weather-only points for the gap
-          let currentTime = lastDataTime + 15 * 60 * 1000
-          while (currentTime <= targetEndTime) {
-            const timestamp = new Date(currentTime).toISOString()
-            const temp = weatherLookup.get(timestamp)
-            
-            chartData.push({
-              timestamp,
-              watts: null,
-              kwh: null,
-              temperature: temp,
-              AC: null
-            })
-            
-            currentTime += 15 * 60 * 1000
-          }
-        }
-      }
-    }
+    // // For 24h view, ensure we show the full 24 hours even if data is missing
+    // if (selectedTimeRange === '24h' && chartData.length > 0) {
+    //   // If there's a gap at the end (due to 2hr delay), fill with weather-only data
+    //   const lastDataTime = new Date(chartData[chartData.length - 1].timestamp).getTime()
+    //   const targetEndTime = now.getTime()
+    // }
     
     return chartData
   }, [selectedTimeRange, electricityData, weatherData, detectedAC])
@@ -270,11 +245,11 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
             <button
               key={range}
               onClick={() => setSelectedTimeRange(range)}
-              className={`px-3 sm:px-4 py-2 rounded text-sm sm:text-base ${
+              className={`flex-1 px-3 sm:px-4 py-2 rounded text-sm sm:text-base ${
                 selectedTimeRange === range ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
               }`}
             >
-              {range === 'yesterday' ? 'Yesterday' : range === '24h' ? 'Last 24h' : range === '7d' ? 'Last 7 days' : 'Last 30 days'}
+              {range === 'yesterday' ? 'Yesterday' : range === '24h' ? '24h' : range === '7d' ? '7d' : range === '30d' ? '30d' : range}
             </button>
           ))}
         </div>
