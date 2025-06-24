@@ -21,6 +21,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "opower" / "src"))
 from opower import Opower, AggregateType, ReadResolution
 
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def get_user_api(username: str, password: str, access_token: str):    
+    async with aiohttp.ClientSession() as client_session:
+        # Create API instance and set the access token directly
+        api = Opower(client_session, "coned", username, password, None)
+        api.access_token = access_token
+        yield api
+
+
+
+@asynccontextmanager
+async def get_demo_api():    
+    demo_username = os.getenv("DEMO_CONED_USERNAME")
+    demo_password = os.getenv("DEMO_CONED_PASSWORD")
+    demo_totp = os.getenv('DEMO_CONED_TOTP_SECRET')
+
+    async with aiohttp.ClientSession() as client_session:
+        # Create API instance and set the access token directly
+        api = Opower(client_session, "coned", demo_username, demo_password, demo_totp)
+        await api.async_login()
+        yield api
+
+
+
 async def fetch_forecast_data(api: Opower, account) -> List[Dict]:
     """Fetch ConEd forecast data"""
     try:

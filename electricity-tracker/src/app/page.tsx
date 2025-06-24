@@ -11,11 +11,12 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user has session cookie
+    // Check if user has session cookie or demo mode cookie
     const checkAuth = () => {
       const hasSessionCookie = document.cookie.includes('user_session=');
+      const hasDemoCookie = document.cookie.includes('demo_mode=true');
       
-      if (hasSessionCookie) {
+      if (hasSessionCookie || hasDemoCookie) {
         setIsAuthenticated(true);
       } else {
         setIsAuthenticated(false);

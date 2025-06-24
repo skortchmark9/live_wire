@@ -9,11 +9,12 @@ interface LoginFormData {
 
 interface LoginFormProps {
   onSubmit: (data: LoginFormData) => void;
+  onDemoLogin: () => void;
   isLoading: boolean;
   error?: string | null;
 }
 
-export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
+export function LoginForm({ onSubmit, onDemoLogin, isLoading, error }: LoginFormProps) {
   const {
     register,
     handleSubmit,
@@ -73,6 +74,16 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
       <div className="text-sm text-gray-600 dark:text-gray-400">
         <p>We&apos;ll temporarily use your credentials to fetch your electricity data.</p>
         <p className="mt-1">Your credentials are not stored after the data pull.</p>
+      </div>
+
+      <div className="text-center">
+        <button
+          type="button"
+          onClick={onDemoLogin}
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+        >
+          No account? Demo with Sam's data
+        </button>
       </div>
     </form>
   );

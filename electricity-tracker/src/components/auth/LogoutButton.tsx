@@ -6,9 +6,9 @@ export function LogoutButton() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    // Clear the session cookie by making a request to a logout endpoint
-    // For now, we'll just clear cookies on the client side and redirect
+    // Clear both cookies
     document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    document.cookie = 'demo_mode=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     router.push('/login');
   };
 

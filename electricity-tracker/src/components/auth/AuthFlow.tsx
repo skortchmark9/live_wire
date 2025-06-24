@@ -93,6 +93,7 @@ export function AuthFlow() {
       {auth.status === null ? (
         <LoginForm
           onSubmit={handleLogin}
+          onDemoLogin={auth.demoLogin}
           isLoading={auth.isLoading}
           error={auth.error}
         />

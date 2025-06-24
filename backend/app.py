@@ -18,7 +18,7 @@ from pydantic import BaseModel
 import uvicorn
 from opower import exceptions as opower_exceptions
 from opower import Opower
-from data_collectors.electricity_collector import collect_electricity_data
+from data_collectors.electricity_collector import collect_electricity_data, get_demo_api, get_user_api
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -94,11 +94,7 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.get("/api/weather-data")
-async def get_weather_data(
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    limit: Optional[int] = Query(None),
-):
+async def get_weather_data():
     result = get_stored_weather_data()
     return result
 
@@ -107,6 +103,40 @@ async def get_predictions(limit: Optional[int] = Query(None)):
     """Get ML model predictions"""
     # TODO: Implement predictions endpoint with proper data source
     raise HTTPException(status_code=501, detail="Predictions endpoint not yet implemented")
+
+@app.post("/api/auth/demo")
+@limiter.limit("5/minute")
+async def demo_login(request: Request, response: Response):
+    """Login with demo credentials - no session required"""
+    logger.info("Demo login initiated")
+    
+    # Verify demo credentials are configured
+    demo_username = os.getenv("DEMO_CONED_USERNAME")
+    demo_password = os.getenv("DEMO_CONED_PASSWORD")
+    
+    if not demo_username or not demo_password:
+        raise HTTPException(status_code=500, detail="Demo mode not configured")
+    
+    # Set demo mode cookie
+    cookie_domain = os.getenv("COOKIE_DOMAIN")
+    is_production = cookie_domain is not None
+    
+    logger.info(f"Setting demo cookie - Production: {is_production}, Domain: {cookie_domain}")
+    
+    response.set_cookie(
+        key="demo_mode", 
+        value="true",
+        domain=cookie_domain,
+        secure=is_production,
+        samesite="none" if is_production else "lax",
+        max_age=7200  # 2 hours
+    )
+    
+    return {
+        "status": "success",
+        "message": "Demo mode activated",
+        "demo_mode": True
+    }
 
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")
@@ -121,7 +151,7 @@ async def login(request: Request, login_request: LoginRequest, response: Respons
     is_production = cookie_domain is not None
     
     logger.info(f"Setting cookie - Production: {is_production}, Domain: {cookie_domain}")
-    
+    response.delete_cookie("demo_mode")  # Clear demo mode cookie if it exists
     response.set_cookie(
         key="user_session", 
         value=session_id,
@@ -172,56 +202,38 @@ async def get_auth_status(session_id: str):
 @app.get("/api/electricity-data")
 async def get_electricity_data_combined(
     request: Request,
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    limit: Optional[int] = Query(None)
 ):
     """Get combined electricity usage and forecast data in a single request"""
     session_id = request.cookies.get("user_session")
-    if not session_id:
+    is_demo = request.cookies.get("demo_mode") == "true"
+
+    if not session_id and not is_demo:
         raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
     
-    # Get the session
-    session = auth_manager.get_session(session_id)
-    if not session or session["status"] != "success":
-        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
-    if not session.get('access_token'):
-        raise HTTPException(status_code=401, detail="No access token.")
-
-    async with aiohttp.ClientSession() as client_session:
-        # Create API instance and set the access token directly
-        api = Opower(client_session, "coned", session["username"], session["password"], None)
-        api.access_token = session["access_token"]
+    get_api_ctx = get_demo_api
+    
+    if not is_demo:
+        # Get the session
+        session = auth_manager.get_session(session_id)
+        if not session or session["status"] != "success":
+            raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+        if not session.get('access_token'):
+            raise HTTPException(status_code=401, detail="No access token.")
         
-        # Collect data using the token-authenticated API instance
-        try:
+        get_api_ctx = lambda: get_user_api(session['username'], session['password'], session['access_token'])
+
+    # Use the context manager to get API instance
+    try:
+        async with get_api_ctx() as api:
             result = await collect_electricity_data(api)
-        except opower_exceptions.ApiException as e:
-            raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
+    except opower_exceptions.ApiException as e:
+        raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
     
     if not result:
         raise HTTPException(status_code=500, detail="Failed to collect electricity data")
     
     usage_data = result.get('usage_data', [])
     forecast_data = result.get('forecast_data', [])
-    
-    # Apply date filtering if provided (for usage data only)
-    if start_date or end_date:
-        filtered_data = []
-        for point in usage_data:
-            point_date = datetime.fromisoformat(point['start_time'].replace('Z', '+00:00')).date()
-            
-            if start_date and point_date < datetime.fromisoformat(start_date).date():
-                continue
-            if end_date and point_date > datetime.fromisoformat(end_date).date():
-                continue
-                
-            filtered_data.append(point)
-        usage_data = filtered_data
-    
-    # Apply limit if provided (for usage data only)
-    if limit:
-        usage_data = usage_data[:limit]
     
     return {
         "metadata": result.get('metadata', {}),

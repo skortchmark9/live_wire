@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
+import { useRouter } from 'next/navigation';
 import { postFetcher, fetcher } from '@/lib/swr';
 
 export interface LoginResponse {
@@ -14,6 +15,7 @@ export interface AuthStatus {
 }
 
 export function useAuth() {
+  const router = useRouter();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isMFASubmitting, setIsMFASubmitting] = useState(false);
@@ -82,6 +84,18 @@ export function useAuth() {
     }
   }, [sessionId, mutate]);
 
+  const demoLogin = useCallback(async () => {
+    try {
+      await postFetcher('/api/auth/demo', {});
+      // Redirect to main page - the demo cookie is now set
+      router.push('/');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Demo login failed';
+      setAuthError(errorMessage);
+      throw error;
+    }
+  }, [router]);
+
   const reset = useCallback(() => {
     setSessionId(null);
     setAuthError(null);
@@ -108,6 +122,7 @@ export function useAuth() {
     // Actions
     login,
     submitMFA,
+    demoLogin,
     reset,
   };
 }
