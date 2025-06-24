@@ -92,22 +92,23 @@ async def fetch_forecast_data(api: Opower, account) -> List[Dict]:
         print(f"Error collecting forecast data: {e}")
         return []
 
-async def collect_electricity_data(authenticated_api: Opower) -> Dict:
+async def collect_electricity_data(authenticated_api: Opower, start_date: Optional[date] = None, end_date: Optional[date] = None) -> Dict:
     """
     Full electricity data collection including usage and forecast data.
     
     Args:
-        username: ConEd username
-        password: ConEd password  
-        totp_secret: 2FA TOTP secret (optional if mfa_callback provided)
-        mfa_callback: Async function that returns MFA code when called (optional)
+        authenticated_api: Authenticated Opower API instance
+        start_date: Start date for data collection (optional, defaults to 30 days ago)
+        end_date: End date for data collection (optional, defaults to tomorrow)
         
     Returns:
         Dictionary with electricity usage data and forecast data
     """    
     # Set date range for recent data (last 30 days to current)
-    start_date = (datetime.now() - timedelta(days=30)).date()
-    end_date = datetime.now().date() + timedelta(days=1)
+    if start_date is None:
+        start_date = (datetime.now() - timedelta(days=30)).date()
+    if end_date is None:
+        end_date = datetime.now().date() + timedelta(days=1)
     
     print(f"Collecting electricity data from {start_date} to {end_date}")
     

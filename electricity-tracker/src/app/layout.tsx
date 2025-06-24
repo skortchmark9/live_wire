@@ -16,6 +16,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "tracy.ac - Energy Insights",
   description: "Energy insights for ConEdison customers in New York City",
+  openGraph: {
+    title: "tracy.ac - Energy Insights",
+    description: "Energy insights for ConEdison customers in New York City",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "tracy.ac - Energy Insights",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "tracy.ac - Energy Insights",
+    description: "Energy insights for ConEdison customers in New York City",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
