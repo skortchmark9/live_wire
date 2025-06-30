@@ -38,24 +38,52 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
     const totalYesterdayKwh = yesterdayData.reduce((sum, item) => sum + (item.consumption_kwh || 0), 0);
     setYesterdayUsage(totalYesterdayKwh);
 
-    // Calculate AC cost for yesterday
-    const hourlyData = yesterdayData
-      .filter(item => item.consumption_kwh !== null)
-      .map(item => ({
-        timestamp: item.start_time,
-        watts: (item.consumption_kwh || 0) * 1000 * 4, // Convert kWh to watts (15-minute intervals)
-      }));
+    // Calculate AC cost for yesterday - exact same logic as LoadDisaggregation
+    const recentData = electricityData
+      .filter(d => {
+        if (d.consumption_kwh === null) return false;
+        const startTime = new Date(d.start_time);
+        return startTime >= yesterday && startTime < yesterdayEnd;
+      })
+      .map(d => ({
+        timestamp: d.start_time,
+        watts: (d.consumption_kwh! * 1000) / 0.25, // Convert kWh to W (15min intervals)
+        kwh: d.consumption_kwh!
+      }))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    if (hourlyData.length > 0) {
-      const baseline = calculateBaseline(hourlyData);
-      const acEvents = detectACEvents(hourlyData, baseline);
+    if (recentData.length > 0) {
+      // Get extended data for baseline calculation (last 7 days)
+      const extendedCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const extendedData = electricityData
+        .filter(d => {
+          if (d.consumption_kwh === null) return false;
+          const startTime = new Date(d.start_time);
+          return startTime >= extendedCutoff;
+        })
+        .map(d => ({
+          timestamp: d.start_time,
+          watts: (d.consumption_kwh! * 1000) / 0.25,
+          kwh: d.consumption_kwh!
+        }))
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      // Calculate baseline usage with extended data
+      const baseline = calculateBaseline(recentData, extendedData);
       
+      // Detect AC usage
+      const acEvents = detectACEvents(recentData, baseline);
+      
+      // Convert events to kWh - exact same calculation as LoadDisaggregation
       const totalAcKwh = acEvents.reduce((sum, event) => {
-        const durationHours = (event.endIndex - event.startIndex + 1) * 0.25; // 15-minute intervals
-        return sum + (event.avgExcessWatts * durationHours / 1000);
+        const duration = event.endIndex - event.startIndex + 1;
+        const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000; // 15-minute intervals
+        return sum + estimatedKwh;
       }, 0);
 
       setAcCostKwh(totalAcKwh);
+    } else {
+      setAcCostKwh(0);
     }
   }, [electricityData]);
 
