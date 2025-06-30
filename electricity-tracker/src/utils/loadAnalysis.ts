@@ -4,15 +4,34 @@ export interface DataPoint {
   kwh?: number;
 }
 
-export function calculateBaseline(data: DataPoint[]): number {
-  if (data.length === 0) return 0;
+export function calculateBaseline(data: DataPoint[], extendedData?: DataPoint[]): number {
+  // Use extended historical data if available, otherwise fall back to current data
+  const dataToAnalyze = extendedData && extendedData.length > 0 ? extendedData : data;
   
-  // Calculate baseline usage (25th percentile)
-  const allWatts = data.map(d => d.watts);
-  const sortedWatts = [...allWatts].sort((a, b) => a - b);
-  const baselineWatts = sortedWatts[Math.floor(sortedWatts.length * 0.18)];
+  if (dataToAnalyze.length === 0) return 0;
   
-  return baselineWatts;
+  // Group data by hour blocks (4-hour windows) and find minimum for each
+  const hourlyMinimums: number[] = [];
+  const windowSize = 16; // 4 hours of 15-minute intervals
+  
+  for (let i = 0; i < dataToAnalyze.length - windowSize; i += windowSize) {
+    const window = dataToAnalyze.slice(i, i + windowSize);
+    const windowMin = Math.min(...window.map(d => d.watts));
+    hourlyMinimums.push(windowMin);
+  }
+  
+  if (hourlyMinimums.length === 0) {
+    // Fallback to simple percentile if not enough data
+    const sortedWatts = [...dataToAnalyze.map(d => d.watts)].sort((a, b) => a - b);
+    return sortedWatts[Math.floor(sortedWatts.length * 0.10)];
+  }
+  
+  // Sort the minimums and take the 25th percentile
+  // This represents typical "minimum" usage periods
+  const sortedMins = [...hourlyMinimums].sort((a, b) => a - b);
+  const baseline = sortedMins[Math.floor(sortedMins.length * 0.25)];
+  
+  return baseline;
 }
 
 export interface ACUsageEvent {

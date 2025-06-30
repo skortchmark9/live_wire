@@ -33,14 +33,14 @@ export function calculateCostBreakdown(usage: number): CostBreakdown {
   })
   variableCost += supplyCost
   
-  const deliveryRate = 0.17745 // 17.745c/kWh
+  const deliveryRate = 0.18050 // 18.050c/kWh
   const deliveryCost = usage * deliveryRate
   variableBreakdown.push({
     tier: 'Delivery',
     usage: usage,
     rate: deliveryRate,
     cost: deliveryCost,
-    description: '17.745¢/kWh'
+    description: '18.050¢/kWh'
   })
   variableCost += deliveryCost
   
@@ -77,7 +77,7 @@ export function calculateCostBreakdown(usage: number): CostBreakdown {
   })
   fixedCost += merchantCharge
   
-  const basicServiceCharge = 20.61
+  const basicServiceCharge = 21.28
   fixedBreakdown.push({
     tier: 'Basic Service Charge',
     usage: null,

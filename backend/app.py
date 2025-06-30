@@ -20,10 +20,22 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env.local in development
+if os.getenv('RAILWAY_ENVIRONMENT_NAME') != 'production':
+    env_path = Path(__file__).parent.parent / '.env.local'
+    if env_path.exists():
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment variables from {env_path}")
+    else:
+        # Try .env as fallback
+        load_dotenv()
+        logger.info("Loaded environment variables from .env")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)

@@ -79,6 +79,21 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
     if (recentData.length === 0) return
 
+    // Get extended data for baseline calculation (last 7 days)
+    const extendedCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    const extendedData = data
+      .filter(d => {
+        if (d.consumption_kwh === null) return false
+        const startTime = new Date(d.start_time)
+        return startTime >= extendedCutoff
+      })
+      .map(d => ({
+        timestamp: d.start_time,
+        watts: (d.consumption_kwh! * 1000) / 0.25,
+        kwh: d.consumption_kwh!
+      }))
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
     // Downsample weather data to 15-minute intervals
     const downsampledWeather = downsampleWeatherTo15Minutes(weather)
     
@@ -88,8 +103,8 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       weatherMap.set(w.timestamp, w.temperature_f)
     })
 
-    // Calculate baseline usage
-    const baseline = calculateBaseline(recentData)
+    // Calculate baseline usage with extended data
+    const baseline = calculateBaseline(recentData, extendedData)
     setBaselineWatts(baseline)
 
     // Detect AC usage
