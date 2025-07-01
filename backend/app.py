@@ -113,7 +113,7 @@ def get_cookie_domain_for_request(request: Request) -> Optional[str]:
     
     for domain in configured_domains:
         if domain in host:
-            return f".{'.'.join(domain.split('.')[-2:])}"  # Get root domain (e.g. .tracy.ac, .railway.app)
+            return domain
     
     return None  # Default to None for localhost or unmatched domains
 
