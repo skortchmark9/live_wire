@@ -27,7 +27,8 @@
         "repo": "."
       },
       "build": {
-        "builder": "NIXPACKS"
+        "builder": "NIXPACKS",
+        "buildCommand": "npm install && npm run build"
       },
       "deploy": {
         "startCommand": "npm run start",
