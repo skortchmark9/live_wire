@@ -203,14 +203,15 @@ async def login(request: Request, login_request: LoginRequest, response: Respons
     
     # Set session cookie with the session_id
     # Use derived cookie domain (None for localhost, domains for production)
-    is_production = cookie_domain is not None
+    request_cookie_domain = get_cookie_domain_for_request(request)
+    is_production = request_cookie_domain is not None
     
-    logger.info(f"Setting cookie - Production: {is_production}, Domain: {cookie_domain}")
+    logger.info(f"Setting cookie - Production: {is_production}, Domain: {request_cookie_domain}")
     response.delete_cookie("demo_mode")  # Clear demo mode cookie if it exists
     response.set_cookie(
         key="user_session", 
         value=session_id,
-        domain=cookie_domain,  # None for localhost, cross-domain for production
+        domain=request_cookie_domain,  # None for localhost, cross-domain for production
         secure=is_production,  # False for localhost HTTP, True for production HTTPS
         samesite="none" if is_production else "lax",  # none for cross-domain, lax for localhost
         max_age=7200  # 2 hours
