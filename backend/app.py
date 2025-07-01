@@ -104,11 +104,21 @@ for origin in raw_origins:
         allowed_origins.append(f"https://{origin}")
         cookie_domains.append(origin)
 
-# Use comma-separated cookie domains, or None if only localhost
-cookie_domain = ",".join(cookie_domains) if cookie_domains else None
+# Store cookie domains for request-based selection
+configured_domains = cookie_domains
+
+def get_cookie_domain_for_request(request: Request) -> Optional[str]:
+    """Get appropriate cookie domain based on request host and configured domains"""
+    host = request.headers.get("host", "")
+    
+    for domain in configured_domains:
+        if domain in host:
+            return f".{'.'.join(domain.split('.')[-2:])}"  # Get root domain (e.g. .tracy.ac, .railway.app)
+    
+    return None  # Default to None for localhost or unmatched domains
 
 logger.info(f"Allowed CORS origins: {allowed_origins}")
-logger.info(f"Cookie domain: {cookie_domain}")
+logger.info(f"Cookie domain: {','.join(cookie_domains)}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -164,14 +174,15 @@ async def demo_login(request: Request, response: Response):
         raise HTTPException(status_code=500, detail="Demo mode not configured")
     
     # Set demo mode cookie  
-    is_production = cookie_domain is not None
+    request_cookie_domain = get_cookie_domain_for_request(request)
+    is_production = request_cookie_domain is not None
     
-    logger.info(f"Setting demo cookie - Production: {is_production}, Domain: {cookie_domain}")
+    logger.info(f"Setting demo cookie - Production: {is_production}, Domain: {request_cookie_domain}")
     
     response.set_cookie(
         key="demo_mode", 
         value="true",
-        domain=cookie_domain,
+        domain=request_cookie_domain,
         secure=is_production,
         samesite="none" if is_production else "lax",
         max_age=7200  # 2 hours
