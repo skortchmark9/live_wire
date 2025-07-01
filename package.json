@@ -10,12 +10,17 @@
   "scripts": {
     "web": "npm run dev --workspace=electricity-tracker",
     "mobile": "npm run start --workspace=electricity-tracker-mobile",
-    "shared": "npm run build --workspace=@electricity-tracker/shared"
+    "shared": "npm run build --workspace=@electricity-tracker/shared",
+    "shared:watch": "npm run dev --workspace=@electricity-tracker/shared"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "expo-yarn-workspaces": "^2.3.2"
+    "expo-yarn-workspaces": "^2.3.2",
+    "nanoid": "^5.1.5",
+    "picocolors": "^1.1.1",
+    "postcss": "^8.5.6",
+    "source-map-js": "^1.2.1"
   }
 }

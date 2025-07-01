@@ -1,0 +1,1 @@
+{"version":3,"file":"usePredictionsData.d.ts","sourceRoot":"","sources":["../../src/hooks/usePredictionsData.ts"],"names":[],"mappings":"AAGA,UAAU,eAAe;IACvB,WAAW,EAAE,KAAK,CAAC;QAEjB,IAAI,EAAE,MAAM,CAAC;QACb,eAAe,EAAE,MAAM,CAAC;QACxB,UAAU,EAAE,MAAM,CAAC;KACpB,CAAC,CAAC;IACH,QAAQ,EAAE,OAAO,CAAC;IAClB,KAAK,EAAE,MAAM,CAAC;CACf;AAED,wBAAgB,kBAAkB;;;;;EAyBjC"}

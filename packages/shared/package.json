@@ -9,10 +9,13 @@
   },
   "devDependencies": {
     "typescript": "^5.0.0",
-    "@types/react": "^18.0.0"
+    "@types/react": "^19.0.0"
   },
   "dependencies": {
     "swr": "^2.3.3",
     "date-fns": "^4.1.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

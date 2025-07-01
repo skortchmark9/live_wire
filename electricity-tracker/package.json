@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
+    "dev:turbo": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -14,6 +15,7 @@
     "packages/*"
   ],
   "dependencies": {
+    "@electricity-tracker/shared": "^1.0.0",
     "@types/recharts": "^1.8.29",
     "date-fns": "^4.1.0",
     "next": "15.3.2",
