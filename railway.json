@@ -24,13 +24,14 @@
     },
     "frontend": {
       "source": {
-        "repo": "electricity-tracker"
+        "repo": "."
       },
       "build": {
-        "builder": "NIXPACKS"
+        "builder": "NIXPACKS",
+        "buildCommand": "npm run shared && cd electricity-tracker && npm run build"
       },
       "deploy": {
-        "startCommand": "npm run start",
+        "startCommand": "cd electricity-tracker && npm run start",
         "healthcheckPath": "/",
         "healthcheckTimeout": 300
       }
