@@ -109,7 +109,7 @@ configured_domains = cookie_domains
 
 def get_cookie_domain_for_request(request: Request) -> Optional[str]:
     """Get appropriate cookie domain based on request host and configured domains"""
-    host = request.headers.get("host", "")
+    host = request.client.host
     logger.info(f'Request host: {host}')
     
     for domain in configured_domains:
