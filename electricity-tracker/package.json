@@ -8,6 +8,11 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "workspaces": [
+    "electricity-tracker-mobile",
+    "electricity-tracker",
+    "packages/*"
+  ],
   "dependencies": {
     "@types/recharts": "^1.8.29",
     "date-fns": "^4.1.0",
