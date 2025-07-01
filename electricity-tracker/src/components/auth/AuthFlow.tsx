@@ -8,8 +8,9 @@ import { useEffect } from 'react';
 import Image from 'next/image';
 
 export function AuthFlow() {
-  const auth = useAuth();
   const router = useRouter();
+  const onNavigate = (path: string) => router.push(path);
+  const auth = useAuth({ onNavigate });
 
   useEffect(() => {
     // Redirect to dashboard on successful authentication

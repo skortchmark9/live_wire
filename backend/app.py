@@ -92,8 +92,23 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware - environment-based configuration
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "localhost:3000,127.0.0.1:3000").split(",")
+allowed_origins = []
+cookie_domains = []
+
+for origin in raw_origins:
+    origin = origin.strip()
+    if origin.startswith("localhost") or "127.0.0.1" in origin:
+        allowed_origins.append(f"http://{origin}")
+    else:
+        allowed_origins.append(f"https://{origin}")
+        cookie_domains.append(origin)
+
+# Use comma-separated cookie domains, or None if only localhost
+cookie_domain = ",".join(cookie_domains) if cookie_domains else None
+
 logger.info(f"Allowed CORS origins: {allowed_origins}")
+logger.info(f"Cookie domain: {cookie_domain}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -148,8 +163,7 @@ async def demo_login(request: Request, response: Response):
         logger.exception("Demo mode not configured")
         raise HTTPException(status_code=500, detail="Demo mode not configured")
     
-    # Set demo mode cookie
-    cookie_domain = os.getenv("COOKIE_DOMAIN")
+    # Set demo mode cookie  
     is_production = cookie_domain is not None
     
     logger.info(f"Setting demo cookie - Production: {is_production}, Domain: {cookie_domain}")
@@ -177,8 +191,7 @@ async def login(request: Request, login_request: LoginRequest, response: Respons
     session_id = await auth_manager.create_session(login_request.username, login_request.password)
     
     # Set session cookie with the session_id
-    # Use environment variable for cookie domain (None for localhost, .railway.app for production)
-    cookie_domain = os.getenv("COOKIE_DOMAIN")  # None for localhost, ".railway.app" for production
+    # Use derived cookie domain (None for localhost, domains for production)
     is_production = cookie_domain is not None
     
     logger.info(f"Setting cookie - Production: {is_production}, Domain: {cookie_domain}")
