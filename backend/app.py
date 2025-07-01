@@ -109,17 +109,10 @@ configured_domains = cookie_domains
 
 def get_cookie_domain_for_request(request: Request) -> Optional[str]:
     """Get appropriate cookie domain based on request host and configured domains"""
-    logger.info(f'All request headers: {dict(request.headers)}')
-    
-    # Check various headers for the original host (due to Railway proxying)
-    host = (request.headers.get("x-forwarded-host") or 
-            request.headers.get("x-original-host") or
-            request.headers.get("host") or
-            "")
-    logger.info(f'Request host: {host}')
+    origin = request.headers.get('origin')
     
     for domain in configured_domains:
-        if domain in host:
+        if domain in origin:
             return domain
     
     return None  # Default to None for localhost or unmatched domains
