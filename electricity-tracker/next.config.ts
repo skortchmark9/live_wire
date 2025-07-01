@@ -1,17 +1,13 @@
 import type { NextConfig } from "next";
 import path from "path";
+import dotenv from "dotenv";
+
+// Load env from one level up (e.g. `/live_wire/.env.local`)
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@electricity-tracker/shared'],
-  
-  webpack: (config) => {
-    // Point to source files directly in development
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@electricity-tracker/shared': path.resolve(__dirname, '../packages/shared/src'),
-    };
-    return config;
-  },
+  // transpilePackages needed for webpack, but not for Turbopack
+  transpilePackages: ['@electricity-tracker/shared']
 };
 
 export default nextConfig;
