@@ -27,11 +27,10 @@
         "repo": "."
       },
       "build": {
-        "builder": "NIXPACKS",
-        "buildCommand": "npm run shared && cd electricity-tracker && npm run build"
+        "builder": "NIXPACKS"
       },
       "deploy": {
-        "startCommand": "cd electricity-tracker && npm run start",
+        "startCommand": "npm run start",
         "healthcheckPath": "/",
         "healthcheckTimeout": 300
       }

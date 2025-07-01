@@ -11,7 +11,9 @@
     "web": "npm run dev --workspace=electricity-tracker",
     "mobile": "npm run start --workspace=electricity-tracker-mobile",
     "shared": "npm run build --workspace=@electricity-tracker/shared",
-    "shared:watch": "npm run dev --workspace=@electricity-tracker/shared"
+    "shared:watch": "npm run dev --workspace=@electricity-tracker/shared",
+    "build": "npm run shared && npm run build --workspace=electricity-tracker",
+    "start": "npm run start --workspace=electricity-tracker"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
