@@ -13,6 +13,7 @@
       "source": {
         "repo": "backend"
       },
+      "watch": ["backend/**"],
       "build": {
         "dockerfile": "backend/Dockerfile"
       },
@@ -26,6 +27,7 @@
       "source": {
         "repo": "."
       },
+      "watch": ["src/**", "public/**", "package.json", "next.config.js"],
       "build": {
         "builder": "NIXPACKS",
         "buildCommand": "npm install && npm run build"
