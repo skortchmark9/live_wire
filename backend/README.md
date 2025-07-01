@@ -25,8 +25,8 @@ export CONED_PASSWORD="your_coned_password"
 python app.py
 ```
 
-The API will be available at `http://localhost:5000`
-Interactive API docs are available at `http://localhost:5000/docs`
+The API will be available at `http://localhost:5050`
+Interactive API docs are available at `http://localhost:5050/docs`
 
 ## API Endpoints
 
@@ -68,4 +68,4 @@ The API can trigger data collection scripts asynchronously:
 
 ## CORS
 
-CORS is enabled to allow the Next.js frontend (running on port 3000) to communicate with this FastAPI backend (running on port 5000).
+CORS is enabled to allow the Next.js frontend (running on port 3000) to communicate with this FastAPI backend (running on port 5050).

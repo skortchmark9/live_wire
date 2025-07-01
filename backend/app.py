@@ -145,6 +145,7 @@ async def demo_login(request: Request, response: Response):
     demo_password = os.getenv("DEMO_CONED_PASSWORD")
     
     if not demo_username or not demo_password:
+        logger.exception("Demo mode not configured")
         raise HTTPException(status_code=500, detail="Demo mode not configured")
     
     # Set demo mode cookie
@@ -276,4 +277,4 @@ async def get_electricity_data_combined(
 
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=5050, reload=True)

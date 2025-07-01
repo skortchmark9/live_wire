@@ -7,7 +7,6 @@ import {
   // Types
   type ElectricityDataPoint, 
   type WeatherDataPoint,
-  type CostBreakdown,
   
   // Components
   TestComponent
@@ -16,19 +15,20 @@ import {
 export default function TestSharedPage() {
   // Test types by creating sample data
   const sampleElectricityPoint: ElectricityDataPoint = {
-    timestamp: new Date(),
-    usage: 1.5,
-    cost: 0.3
+    start_time: new Date().toISOString(),
+    end_time: new Date().toISOString(),
+    consumption_kwh: 1.5,
+    provided_cost: 0.3
   };
   
   const sampleWeatherPoint: WeatherDataPoint = {
-    timestamp: new Date(),
-    temperature: 72,
-    humidity: 60
+    timestamp: new Date().toISOString(),
+    temperature_f: 72,
+    humidity_percent: 60
   };
   
   // Simple test data
-  const apiUrl = "http://localhost:5000"; // Hardcoded for test
+  const apiUrl = "http://localhost:5050"; // Hardcoded for test
   
   return (
     <div className="min-h-screen bg-green-50 p-8">
@@ -45,10 +45,10 @@ export default function TestSharedPage() {
               📊 Types Import Test
             </h2>
             <p className="text-gray-600">
-              ✅ ElectricityDataPoint: {sampleElectricityPoint.usage} kWh
+              ✅ ElectricityDataPoint: {sampleElectricityPoint.consumption_kwh} kWh
             </p>
             <p className="text-gray-600">
-              ✅ WeatherDataPoint: {sampleWeatherPoint.temperature}°F
+              ✅ WeatherDataPoint: {sampleWeatherPoint.temperature_f}°F
             </p>
           </div>
           

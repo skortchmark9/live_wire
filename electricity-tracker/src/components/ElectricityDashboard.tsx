@@ -6,9 +6,7 @@ import LoadDisaggregation from './LoadDisaggregation'
 import CostInsightsTab from './CostInsightsTab'
 import HomeTab from './HomeTab'
 import { Header } from './Header'
-import { BillingProjectionProvider } from '@/contexts/BillingProjectionContext'
-import { useElectricityData } from '@/hooks/useElectricityData'
-import { useWeatherData } from '@/hooks/useWeatherData'
+import { BillingProjectionProvider, useElectricityData, useWeatherData } from '@electricity-tracker/shared'
 // import { usePredictionsData } from '@/hooks/usePredictionsData' // unused import
 import { 
   ElectricityDataPoint, 
@@ -17,7 +15,7 @@ import {
   // PredictionDataPoint, // unused type 
   ConEdForecast,
   ActiveTab 
-} from './types'
+} from '@electricity-tracker/shared'
 
 export default function ElectricityDashboard() {
   // Use SWR hooks for all data fetching

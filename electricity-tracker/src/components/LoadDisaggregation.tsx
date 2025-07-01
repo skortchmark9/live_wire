@@ -3,16 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar, ReferenceLine } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { useWeatherData, downsampleWeatherTo15Minutes } from '@/hooks/useWeatherData'
-import { calculateUsageCost } from '@/utils/costCalculations'
-import { calculateBaseline, detectACEvents } from '@/utils/loadAnalysis'
-
-interface ElectricityDataPoint {
-  start_time: string
-  end_time: string
-  consumption_kwh: number | null
-  provided_cost: number | null
-}
+import { useWeatherData, downsampleWeatherTo15Minutes, calculateUsageCost, calculateBaseline, detectACEvents, ElectricityDataPoint } from '@electricity-tracker/shared'
 
 interface WeatherDataPoint {
   timestamp: string

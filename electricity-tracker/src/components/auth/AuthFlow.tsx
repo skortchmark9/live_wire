@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@electricity-tracker/shared';
 import { LoginForm } from './LoginForm';
 import { MFAForm } from './MFAForm';
 import { useRouter } from 'next/navigation';

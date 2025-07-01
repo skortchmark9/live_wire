@@ -1,7 +1,7 @@
 'use client'
 
 import { ThemeToggle } from './ThemeToggle'
-import { ActiveTab } from './types'
+import { ActiveTab } from '@electricity-tracker/shared'
 import Image from 'next/image'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'

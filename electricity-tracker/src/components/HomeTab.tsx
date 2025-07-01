@@ -1,10 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { calculateUsageCost } from '@/utils/costCalculations';
-import { calculateBaseline, detectACEvents } from '@/utils/loadAnalysis';
-import { ActiveTab, ElectricityDataPoint } from './types';
-import { useBillingProjection } from '@/contexts/BillingProjectionContext';
+import { calculateUsageCost, calculateBaseline, detectACEvents, useBillingProjection, ActiveTab, ElectricityDataPoint } from '@electricity-tracker/shared';
 
 interface HomeTabProps {
   electricityData: ElectricityDataPoint[];

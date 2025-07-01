@@ -3,9 +3,7 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, ComposedChart, Cell } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { CombinedDataPoint } from './types'
-import { calculateCostBreakdown } from '@/utils/costCalculations'
-import { useBillingProjection } from '@/contexts/BillingProjectionContext'
+import { CombinedDataPoint, calculateCostBreakdown, useBillingProjection } from '@electricity-tracker/shared'
 
 export default function CostInsightsTab() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)

@@ -2,7 +2,7 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { CombinedDataPoint, PredictionDataPoint, TimeRange } from './types'
+import { CombinedDataPoint, PredictionDataPoint, TimeRange } from '@electricity-tracker/shared'
 
 interface OverviewTabProps {
   combinedData: CombinedDataPoint[]
