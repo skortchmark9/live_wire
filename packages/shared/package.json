@@ -1,0 +1,18 @@
+{
+  "name": "@electricity-tracker/shared",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0"
+  },
+  "dependencies": {
+    "swr": "^2.3.3",
+    "date-fns": "^4.1.0"
+  }
+}

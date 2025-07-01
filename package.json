@@ -1,0 +1,18 @@
+{
+  "name": "electricity-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "electricity-tracker",
+    "electricity-tracker-mobile"
+  ],
+  "scripts": {
+    "web": "npm run dev --workspace=electricity-tracker",
+    "mobile": "npm run start --workspace=electricity-tracker-mobile",
+    "shared": "npm run build --workspace=@electricity-tracker/shared"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

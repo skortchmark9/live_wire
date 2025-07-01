@@ -1,0 +1,43 @@
+{
+  "name": "electricity-tracker-mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "@electricity-tracker/shared": "^1.0.0",
+    "@react-navigation/bottom-tabs": "^7.4.2",
+    "@react-navigation/native": "^7.1.14",
+    "@react-navigation/stack": "^7.4.2",
+    "date-fns": "^4.1.0",
+    "expo": "~53.0.13",
+    "expo-constants": "~17.1.6",
+    "expo-device": "~7.1.4",
+    "expo-local-authentication": "~16.0.4",
+    "expo-notifications": "~0.31.3",
+    "expo-secure-store": "~14.2.3",
+    "expo-status-bar": "~2.2.3",
+    "nativewind": "^4.1.23",
+    "react": "19.0.0",
+    "react-hook-form": "^7.59.0",
+    "react-native": "0.79.4",
+    "react-native-chart-kit": "^6.12.0",
+    "react-native-gesture-handler": "^2.26.0",
+    "react-native-reanimated": "^3.18.0",
+    "react-native-safe-area-context": "^5.5.0",
+    "react-native-screens": "^4.11.1",
+    "react-native-svg": "^15.12.0",
+    "swr": "^2.3.3",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@types/react": "~19.0.10",
+    "typescript": "~5.8.3"
+  },
+  "private": true
+}
