@@ -10,6 +10,9 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import List, Dict
 import time
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def get_historical_weather(start_date: date, end_date: date, 
@@ -37,13 +40,18 @@ def get_historical_weather(start_date: date, end_date: date,
     # API allows up to 1 year of data per request, but we'll chunk by month for reliability
     while current_date < end_date:
         # Get one month at a time
+        # Calculate the last day of the current month
+        if current_date.month == 12:
+            next_month = current_date.replace(year=current_date.year + 1, month=1, day=1)
+        else:
+            next_month = current_date.replace(month=current_date.month + 1, day=1)
+        
         month_end = min(
-            current_date.replace(day=28) + timedelta(days=4),  # End of month
+            next_month - timedelta(days=1),  # Last day of current month
             end_date
         )
-        month_end = month_end.replace(day=min(month_end.day, 28))  # Handle month boundaries
         
-        print(f"Collecting weather data from {current_date} to {month_end}")
+        log.info(f"Collecting weather data from {current_date} to {month_end}")
         
         params = {
             "latitude": latitude,
@@ -86,7 +94,7 @@ def get_historical_weather(start_date: date, end_date: date,
                 all_weather_data.append(weather_point)
                 
         except Exception as e:
-            print(f"Error collecting weather data for {current_date} to {month_end}: {e}")
+            log.error(f"Error collecting weather data for {current_date} to {month_end}: {e}")
             
         # Move to next month
         current_date = month_end + timedelta(days=1)
@@ -112,7 +120,7 @@ def get_current_and_forecast_weather(latitude: float = 40.7589, longitude: float
     # Open-Meteo current + forecast API
     base_url = "https://api.open-meteo.com/v1/forecast"
     
-    print("Collecting current weather and forecast data")
+    log.info("Collecting current weather and forecast data")
     
     params = {
         "latitude": latitude,
@@ -158,7 +166,7 @@ def get_current_and_forecast_weather(latitude: float = 40.7589, longitude: float
         return all_weather_data
         
     except Exception as e:
-        print(f"Error collecting current/forecast weather data: {e}")
+        log.error(f"Error collecting current/forecast weather data: {e}")
         return []
 
 
@@ -201,19 +209,19 @@ def collect_weather_data_full() -> Dict:
     start_date = (datetime.now() - timedelta(days=30)).date()
     historical_end_date = date.today() - timedelta(days=8)  # Stop 8 days ago for archive API
     
-    print(f"Collecting weather data for NYC:")
-    print(f"  Recent historical: {start_date} to {historical_end_date}")
-    print(f"  Current + Forecast: last 7 days + next 7 days")
+    log.info(f"Collecting weather data for NYC:")
+    log.info(f"  Recent historical: {start_date} to {historical_end_date}")
+    log.info(f"  Current + Forecast: last 7 days + next 7 days")
     
     # Get recent historical weather data
     historical_data = []
     if historical_end_date >= start_date:
         historical_data = get_historical_weather(start_date, historical_end_date)
-        print(f"Collected {len(historical_data)} historical weather points")
+        log.info(f"Collected {len(historical_data)} historical weather points")
     
     # Get current and forecast weather data (last 7 days + next 7 days)
     current_forecast_data = get_current_and_forecast_weather()
-    print(f"Collected {len(current_forecast_data)} current/forecast weather points")
+    log.info(f"Collected {len(current_forecast_data)} current/forecast weather points")
     
     # Merge the data
     all_weather_data = merge_weather_data(historical_data, current_forecast_data)
@@ -226,8 +234,8 @@ def collect_weather_data_full() -> Dict:
         actual_start = start_date.isoformat()
         actual_end = date.today().isoformat()
     
-    print(f"\nSuccessfully collected {len(all_weather_data)} total weather data points")
-    print(f"Date range: {actual_start} to {actual_end}")
+    log.info(f"Successfully collected {len(all_weather_data)} total weather data points")
+    log.info(f"Date range: {actual_start} to {actual_end}")
     
     return {
         "data": all_weather_data,
