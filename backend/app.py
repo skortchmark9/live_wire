@@ -93,7 +93,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware - environment-based configuration
-raw_origins = os.getenv("ALLOWED_ORIGINS", "localhost:3000,127.0.0.1:3000").split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "localhost:3000,localhost:3002,127.0.0.1:3000,127.0.0.1:3002").split(",")
 allowed_origins = []
 cookie_domains = []
 
