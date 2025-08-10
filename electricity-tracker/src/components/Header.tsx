@@ -1,9 +1,9 @@
 'use client'
 
 import { ThemeToggle } from './ThemeToggle'
-import { ActiveTab } from '@electricity-tracker/shared'
+import { ActiveTab, useAuth } from '@electricity-tracker/shared'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface HeaderProps {
@@ -14,10 +14,11 @@ interface HeaderProps {
 export function Header({ activeTab, setActiveTab }: HeaderProps) {
   const [showInfoModal, setShowInfoModal] = useState(false)
   const router = useRouter()
+  const onNavigate = useCallback((path: string) => router.push(path), [router])
+  const auth = useAuth({ onNavigate })
 
-  const handleLogout = async () => {
-    document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    router.push('/login');
+  const handleLogout = () => {
+    auth.logout()
   }
 
   return (

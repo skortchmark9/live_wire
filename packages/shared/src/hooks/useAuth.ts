@@ -169,6 +169,27 @@ export function useAuth(options?: UseAuthOptions) {
     mutate(undefined, false);
   }, [mutate]);
 
+  const logout = useCallback(() => {
+    // Clear the cookie
+    if (typeof document !== 'undefined') {
+      document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    }
+    
+    // Reset all state to initial values
+    setSessionId('no-session'); // Set to sentinel value to trigger proper state
+    setAuthError(null);
+    setIsLoggingIn(false);
+    setIsMFASubmitting(false);
+    
+    // Clear SWR cache
+    mutate(undefined, false);
+    
+    // Navigate to login if callback provided
+    if (onNavigate) {
+      onNavigate('/login');
+    }
+  }, [mutate, onNavigate]);
+
   // Determine overall loading state
   const isLoading = isLoggingIn || isMFASubmitting || (!!sessionId && !authStatus && !statusError);
 
@@ -205,5 +226,6 @@ export function useAuth(options?: UseAuthOptions) {
     submitMFA,
     demoLogin,
     reset,
+    logout,
   };
 }
