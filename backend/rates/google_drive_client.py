@@ -3,6 +3,7 @@ Google Drive Client Module
 """
 import os
 import io
+import json
 from typing import Optional
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -15,9 +16,16 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapi
 
 
 class GoogleDriveClient:
-    """Client for Google Drive and Sheets operations"""
+    """Client for Google Drive and Sheets operations with OAuth authentication"""
     
-    def __init__(self, credentials_path: str = 'credentials.json', token_path: str = 'token.json'):
+    def __init__(self, credentials_path: str = 'rates/credentials.json', token_path: str = 'rates/token.json'):
+        """
+        Initialize Google Drive client with OAuth authentication
+        
+        Args:
+            credentials_path: Path to OAuth client credentials JSON file
+            token_path: Path to token JSON file (for local development)
+        """
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.sheets_service = None
@@ -25,32 +33,63 @@ class GoogleDriveClient:
         self._authenticate()
     
     def _authenticate(self):
-        """Authenticate and build Google services"""
+        """Authenticate and build Google services using OAuth"""
         creds = None
         
-        # Load existing token
-        if os.path.exists(self.token_path):
-            creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
+        # Check for Railway environment variables first
+        refresh_token = os.getenv('GOOGLE_OAUTH_REFRESH_TOKEN')
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
         
-        # Refresh or get new credentials
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                if not os.path.exists(self.credentials_path):
-                    raise FileNotFoundError(f"Credentials file not found: {self.credentials_path}")
-                    
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_path, SCOPES)
-                creds = flow.run_local_server(port=0)
+        if refresh_token and client_id and client_secret:
+            # Railway/production environment - use environment variables
+            print("Using OAuth credentials from environment variables")
+            creds = Credentials(
+                token=None,  # Will be refreshed
+                refresh_token=refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret,
+                scopes=SCOPES
+            )
+            # Refresh to get a valid access token
+            creds.refresh(Request())
             
-            # Save credentials
-            with open(self.token_path, 'w') as token:
-                token.write(creds.to_json())
+        else:
+            # Local development - use file-based OAuth flow
+            print("Using OAuth credentials from local files")
+            
+            # Load existing token if available
+            if os.path.exists(self.token_path):
+                creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
+            
+            # If there are no valid credentials, initiate the OAuth flow
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    print("Refreshing expired OAuth token...")
+                    creds.refresh(Request())
+                else:
+                    if not os.path.exists(self.credentials_path):
+                        raise FileNotFoundError(
+                            f"OAuth credentials file not found: {self.credentials_path}. "
+                            f"Either provide the file or set environment variables: "
+                            f"GOOGLE_OAUTH_REFRESH_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET"
+                        )
+                    
+                    print("Starting OAuth flow...")
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.credentials_path, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                
+                # Save the credentials for the next run
+                with open(self.token_path, 'w') as token:
+                    token.write(creds.to_json())
+                    print(f"OAuth token saved to {self.token_path}")
         
         # Build services
         self.sheets_service = build('sheets', 'v4', credentials=creds)
         self.drive_service = build('drive', 'v3', credentials=creds)
+        print("✅ Google API services initialized successfully")
     
     def download_sheet_as_excel(self, file_id: str, output_path: str) -> bool:
         """Download a Google Sheet as Excel file"""

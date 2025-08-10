@@ -220,7 +220,6 @@ class Opower:
         for customer in await self._async_get_customers():
             utility_accounts = []
             utility_account_ids = []
-            print(customer)
             for account in customer["utilityAccounts"]:
                 utility_accounts.append(account)
                 utility_account_ids.append(account["preferredUtilityAccountId"])

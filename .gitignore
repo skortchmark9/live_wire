@@ -5,3 +5,9 @@ node_modules
 .env*
 *.p8
 logs/*.log
+
+# Google credentials files
+backend/rates/credentials.json
+backend/rates/token.json
+backend/rates/service-account.json
+service-account.json

@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/rates", tags=["rates"])
 
-# Constants
-TEMPLATE_ID = "1O08jgc4Zmg0UACKCK_j-9xzcnPdAMy9BOlA21Gzbm1k"
-FOLDER_ID = "1f86cWxqcSF57icLWyCStxgPWczz_FVvc"
+# Constants - use environment variables with fallbacks
+TEMPLATE_ID = os.getenv("GOOGLE_TEMPLATE_ID", "1O08jgc4Zmg0UACKCK_j-9xzcnPdAMy9BOlA21Gzbm1k")
+FOLDER_ID = os.getenv("GOOGLE_FOLDER_ID", "1f86cWxqcSF57icLWyCStxgPWczz_FVvc")
 
 # Global exception handler for background tasks
 async def handle_background_task_error(session_id: str, error: Exception):
@@ -319,6 +319,7 @@ async def process_rate_calculation(session_id: str, username: str, password: str
         await send_progress(session_id, "initializing", 
                            "Initializing Google Drive client...", 5)
         
+        # Initialize with OAuth authentication (supports both local files and Railway env vars)
         google_client = GoogleDriveClient(
             credentials_path='rates/credentials.json',
             token_path='rates/token.json'
