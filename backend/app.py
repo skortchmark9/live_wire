@@ -15,7 +15,7 @@ from pydantic import BaseModel
 import uvicorn
 from opower import exceptions as opower_exceptions
 from opower import Opower
-from data_collectors.electricity_collector import collect_electricity_data, get_demo_api, get_user_api
+from data_collectors.electricity_collector import collect_electricity_data, get_user_api
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -60,24 +60,20 @@ if os.getenv('RAILWAY_ENVIRONMENT_NAME') != 'production':
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Thread-safe TTL cache for demo data (15 minute TTL, max 1 item)
-demo_cache = TTLCache(maxsize=1, ttl=900)  # 15 minutes = 900 seconds
+# Thread-safe TTL cache for demo data (15 minute TTL, max 10 item)
+data_cache = TTLCache(maxsize=10, ttl=900)  # 15 minutes = 900 seconds
 
-async def get_cached_demo_data():
-    """Get demo data with caching"""
-    cache_key = "demo_data"
-    
-    if cache_key in demo_cache:
+async def cached_collect_electricity_data(api, cache_key):
+    if cache_key in data_cache:
         logger.info("Returning cached demo data")
-        return demo_cache[cache_key]
+        return data_cache[cache_key]
     
-    logger.info("Cache miss - fetching fresh demo data from ConEd")
-    async with get_demo_api() as api:
-        result = await collect_electricity_data(api)
-    
+    logger.info("Cache miss - fetching fresh data from ConEd")
+    result = await collect_electricity_data(api)
+
     if result:
-        demo_cache[cache_key] = result
-        logger.info("Demo data cached for 15 minutes")
+        data_cache[cache_key] = result
+        logger.info("Data cached for 15 minutes")
     
     return result
 
@@ -188,23 +184,25 @@ async def demo_login(request: Request, response: Response):
     app_domain = os.getenv('APP_DOMAIN')
     cookie_domain = f'.{app_domain}' if app_domain else None
     is_production = cookie_domain is not None
-    
+
+    session_id = await auth_manager.create_demo_session(demo_username, demo_password)
+
     logger.info(f"Setting demo cookie - Production: {is_production}, Domain: {cookie_domain}")
-    
     response.set_cookie(
-        key="demo_mode", 
-        value="true",
-        domain=cookie_domain,
-        secure=is_production,
-        samesite="none" if is_production else "lax",
+        key="user_session", 
+        value=session_id,
+        domain=cookie_domain,  # None for localhost, .domain for production
+        secure=is_production,  # False for localhost HTTP, True for production HTTPS
+        samesite="none" if is_production else "lax",  # none for cross-domain, lax for localhost
         max_age=7200  # 2 hours
     )
     
     return {
+        "session_id": session_id,
         "status": "success",
-        "message": "Demo mode activated",
-        "demo_mode": True
+        "message": "Authenticated with demo account"
     }
+
 
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")
@@ -220,7 +218,6 @@ async def login(request: Request, login_request: LoginRequest, response: Respons
     is_production = cookie_domain is not None
     
     logger.info(f"Setting cookie - Production: {is_production}, Domain: {cookie_domain}")
-    response.delete_cookie("demo_mode")  # Clear demo mode cookie if it exists
     response.set_cookie(
         key="user_session", 
         value=session_id,
@@ -274,30 +271,24 @@ async def get_electricity_data_combined(
 ):
     """Get combined electricity usage and forecast data in a single request"""
     session_id = request.cookies.get("user_session")
-    is_demo = request.cookies.get("demo_mode") == "true"
 
-    if not session_id and not is_demo:
+    if not session_id:
         raise HTTPException(status_code=401, detail="Authentication required. Please login first.")
     
-    if is_demo:
-        # Use cached demo data
-        try:
-            result = await get_cached_demo_data()
-        except opower_exceptions.ApiException as e:
-            raise HTTPException(status_code=e.status, detail=f"Failed to collect demo electricity data: {str(e)}")
-    else:
-        # Regular user flow
-        session = auth_manager.get_session(session_id)
-        if not session or session["status"] != "success":
-            raise HTTPException(status_code=401, detail="Session expired. Please login again.")
-        if not session.get('access_token'):
-            raise HTTPException(status_code=401, detail="No access token.")
-        
-        try:
-            async with get_user_api(session['username'], session['password'], session['access_token']) as api:
-                result = await collect_electricity_data(api)
-        except opower_exceptions.ApiException as e:
-            raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
+    session = auth_manager.get_session(session_id)
+    if not session or session["status"] != "success":
+        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+    if not session.get('access_token'):
+        raise HTTPException(status_code=401, detail="No access token.")
+    
+    is_demo = session.get('is_demo')
+
+    try:
+        async with get_user_api(session['username'], session['password'], session['access_token']) as api:
+            key = 'demo' if is_demo else session['access_token']
+            result = await cached_collect_electricity_data(api, key)
+    except opower_exceptions.ApiException as e:
+        raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
     
     if not result:
         raise HTTPException(status_code=500, detail="Failed to collect electricity data")

@@ -4,6 +4,7 @@ User authentication module for ConEd login with MFA support
 import aiohttp
 import sys
 from pathlib import Path
+from data_collectors.electricity_collector import get_demo_api
 from opower import Opower
 import asyncio
 import uuid
@@ -40,13 +41,41 @@ class AuthenticationManager:
                 "status": "authenticating",
                 "error": None,
                 "result": None,
-                "access_token": None
+                "access_token": None,
+                "is_demo": False,
             }
             
             # Clean up old sessions (older than 5 minutes)
             # await self._cleanup_expired_sessions()
         
         logger.info(f"Created MFA session {session_id} for user {username}")
+        return session_id
+    
+    async def create_demo_session(self, username: str, password: str) -> str:
+        """
+        Create a new authentication session and return session ID
+        """
+        session_id = str(uuid.uuid4())
+        
+        async with get_demo_api() as api:
+            # Store session info
+            self.mfa_sessions[session_id] = {
+                "username": username,
+                "password": password,
+                "mfa_event": None,
+                "mfa_code": None,
+                "created_at": datetime.now(),
+                "status": "success",
+                "error": None,
+                "result": None,
+                "access_token": api.access_token,
+                "is_demo": True,
+            }
+            
+            # Clean up old sessions (older than 5 minutes)
+            # await self._cleanup_expired_sessions()
+        
+        logger.info(f"Created Demo Session {session_id}")
         return session_id
     
     async def submit_mfa(self, session_id: str, mfa_code: str) -> bool:

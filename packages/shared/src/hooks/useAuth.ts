@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 import { postFetcher, fetcher } from '../lib/swr';
 
@@ -17,14 +17,44 @@ export interface UseAuthOptions {
   onNavigate?: (path: string) => void;
 }
 
+// Helper function to extract session from cookies
+const getSessionFromCookie = (): string | null => {
+  if (typeof document === 'undefined') return null;
+  
+  const hasSessionCookie = document.cookie.includes('user_session=');
+  
+  if (hasSessionCookie) {
+    // Extract session ID from cookie
+    const match = document.cookie.match(/user_session=([^;]+)/);
+    return match ? match[1] : null;
+  }
+  return null;
+};
+
 export function useAuth(options?: UseAuthOptions) {
   const { onNavigate } = options || {};
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isMFASubmitting, setIsMFASubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
-  // Use SWR to poll auth status (only when sessionId exists)
+  // Initialize session from cookies on client side only
+  useEffect(() => {
+    if (!initialized) {
+      const sessionFromCookie = getSessionFromCookie();
+      console.log('useAuth: Checking cookies on init, found:', sessionFromCookie);
+      if (sessionFromCookie) {
+        setSessionId(sessionFromCookie);
+      } else {
+        // Set a sentinel value to trigger the 404 path
+        setSessionId('no-session');
+      }
+      setInitialized(true);
+    }
+  }, [initialized]);
+
+  // Use SWR to poll auth status (only when sessionId exists, including sentinel)
   const { data: authStatus, error: statusError, mutate } = useSWR<AuthStatus>(
     sessionId ? `/api/auth/status/${sessionId}` : null,
     fetcher,
@@ -39,6 +69,14 @@ export function useAuth(options?: UseAuthOptions) {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
       errorRetryCount: 3,
+      onError: (error) => {
+        // Handle 404 errors as expired sessions
+        if (error && error.status === 404) {
+          console.log('Session not found (404), clearing cookies and resetting session');
+          clearInvalidSession();
+          onNavigate && onNavigate('/login');
+        }
+      }
     }
   );
 
@@ -88,6 +126,9 @@ export function useAuth(options?: UseAuthOptions) {
   }, [sessionId, mutate]);
 
   const demoLogin = useCallback(async () => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+
     try {
       await postFetcher('/api/auth/demo', {});
       // Use callback for navigation instead of router.push
@@ -98,8 +139,26 @@ export function useAuth(options?: UseAuthOptions) {
       const errorMessage = error instanceof Error ? error.message : 'Demo login failed';
       setAuthError(errorMessage);
       throw error;
+    } finally {
+      setIsLoggingIn(false);
     }
   }, [onNavigate]);
+
+  const clearInvalidSession = useCallback(() => {
+    // Clear cookies
+    if (typeof document !== 'undefined') {
+      document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    }
+    
+    // Reset state
+    setSessionId(null);
+    setAuthError(null);
+    setIsLoggingIn(false);
+    setIsMFASubmitting(false);
+    
+    // Clear SWR cache
+    mutate(undefined, false);
+  }, [mutate]);
 
   const reset = useCallback(() => {
     setSessionId(null);
@@ -116,11 +175,28 @@ export function useAuth(options?: UseAuthOptions) {
   // Determine overall error state
   const error = authError || (statusError instanceof Error ? statusError.message : null);
 
+  // Determine the final authentication status
+  let status = null;
+  
+  if (!initialized) {
+    // Still initializing - show loading state
+    status = null;
+  } else if (statusError && statusError.status === 404) {
+    // Session doesn't exist (includes our 'no-session' sentinel)
+    status = 'failed';
+  } else {
+    // We have a session, use the status from backend
+    status = authStatus?.status || null;
+  }
+
+  // Don't show errors when still initializing or when using sentinel value
+  const shouldShowError = initialized && sessionId !== null && sessionId !== 'no-session';
+
   return {
     // State
     sessionId,
-    status: authStatus?.status || null,
-    error: error || authStatus?.error || null,
+    status,
+    error: shouldShowError ? (error || authStatus?.error || null) : null,
     isLoading,
     data: authStatus?.data || null,
     

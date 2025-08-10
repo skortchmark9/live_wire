@@ -2,42 +2,28 @@
 
 import ElectricityDashboard from '@/components/ElectricityDashboard'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { useEffect, useState } from 'react';
+import { useAuth } from '@electricity-tracker/shared';
 import { useRouter } from 'next/navigation';
+import { useEffect, useCallback } from 'react';
 
 export default function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const router = useRouter();
+  const onNavigate = useCallback((path: string) => router.push(path), [router]);
+  const auth = useAuth({ onNavigate });
 
   useEffect(() => {
-    // Check if user has session cookie or demo mode cookie
-    const checkAuth = () => {
-      const hasSessionCookie = document.cookie.includes('user_session=');
-      const hasDemoCookie = document.cookie.includes('demo_mode=true');
-      
-      if (hasSessionCookie || hasDemoCookie) {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-        router.push('/login');
-      }
-    };
+    if (auth.status !== null && auth.status !== 'success') {
+      onNavigate('/login');
+    }
+  }, [auth.status, onNavigate])
 
-    checkAuth();
-  }, [router]);
-
-  // Show loading while checking auth
-  if (isAuthenticated === null) {
+  // Show loading while redirecting to login
+  if (auth.status !== 'success') {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
-  }
-
-  // Only show dashboard if authenticated
-  if (!isAuthenticated) {
-    return null;
   }
 
   return (

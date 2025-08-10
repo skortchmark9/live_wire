@@ -17,7 +17,6 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
 
   const handleLogout = async () => {
     document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    document.cookie = 'demo_mode=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     router.push('/login');
   }
 

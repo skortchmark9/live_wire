@@ -6,9 +6,8 @@ export function LogoutButton() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    // Clear both cookies
+    // Clear session cookie
     document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-    document.cookie = 'demo_mode=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     router.push('/login');
   };
 
