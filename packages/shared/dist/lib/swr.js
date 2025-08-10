@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.swrConfig = exports.postFetcher = exports.fetcher = exports.FetchError = exports.getApiBaseUrl = void 0;
 // Ensure the API URL has the correct protocol
 const getApiBaseUrl = () => {
-    const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const url = process.env.NEXT_PUBLIC_API_URL || 'SET_NEXT_PUBLIC_API_URL';
     // If the URL doesn't start with http:// or https://, use current protocol
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
         const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';

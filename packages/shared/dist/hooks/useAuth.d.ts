@@ -12,7 +12,7 @@ export interface UseAuthOptions {
 }
 export declare function useAuth(options?: UseAuthOptions): {
     sessionId: string | null;
-    status: "authenticating" | "mfa_required" | "success" | "failed" | "timeout" | null;
+    status: string | null;
     error: string | null;
     isLoading: boolean;
     data: {} | null;
@@ -20,5 +20,6 @@ export declare function useAuth(options?: UseAuthOptions): {
     submitMFA: (mfaCode: string) => Promise<any>;
     demoLogin: () => Promise<void>;
     reset: () => void;
+    logout: () => void;
 };
 //# sourceMappingURL=useAuth.d.ts.map

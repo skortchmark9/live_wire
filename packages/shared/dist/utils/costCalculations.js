@@ -7,7 +7,6 @@ function calculateCostBreakdown(usage) {
     const fixedBreakdown = [];
     let variableCost = 0;
     let fixedCost = 0;
-    console.log('yay?');
     // Variable costs (usage-based)
     const supplyRate = 0.11953; // 11.953c/kWh
     const supplyCost = usage * supplyRate;
