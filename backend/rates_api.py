@@ -12,6 +12,7 @@ import logging
 from rates.google_drive_client import GoogleDriveClient
 from rates.excel_processor import ExcelProcessor
 from rates.rate_calculator import RateCalculator
+from rates.region_detector import RegionDetector
 from user import auth_manager
 
 logger = logging.getLogger(__name__)
@@ -164,14 +165,27 @@ async def fetch_coned_data(session_id: str, username: str, password: str,
         
         accounts = await api.async_get_accounts()
         
-        # Find electric account with quarter-hour resolution
+        # Find electric account with quarter-hour resolution and detect region
         elec_account = None
+        region_code = None
         for account in accounts:
             if (account.meter_type.value == 'ELEC' and 
                 account.read_resolution and 
                 'QUARTER' in account.read_resolution.value):
                 elec_account = account
                 account_id = account.id
+                
+                # Detect region from customer address
+                if account.customer.address:
+                    region_code = RegionDetector.detect_region(account.customer.address)
+                    if region_code:
+                        region_desc = RegionDetector.get_region_description(region_code)
+                        logger.info(f"Detected rate region: {region_code} ({region_desc})")
+                    else:
+                        logger.warning("Could not determine rate region from customer address")
+                else:
+                    logger.warning("No address information available for region detection")
+                
                 print(f"Using electric account: {account.id}")
                 break
         
@@ -185,7 +199,7 @@ async def fetch_coned_data(session_id: str, username: str, password: str,
             session_id, api, elec_account, start_date, end_date
         )
         
-        return data_points, account_id
+        return data_points, account_id, region_code
 
 async def fetch_usage_with_progress_direct(session_id: str, api, 
                                           account, start_date: datetime, end_date: datetime) -> list:
@@ -229,14 +243,14 @@ async def fetch_usage_with_progress_direct(session_id: str, api,
 
 async def fill_and_upload(session_id: str, google_client: GoogleDriveClient,
                          template_path: str, data_points: list, 
-                         username: str, account_id: str) -> str:
+                         username: str, account_id: str, region_code: str = None) -> str:
     """Fill template and upload to Google Drive"""
     await send_progress(session_id, "filling_template",
                        f"Filling template with {len(data_points)} data points...", 75)
     
     output_path = f"/tmp/filled_{session_id}.xlsx"
     filled_count = await ExcelProcessor.fill_template(
-        template_path, output_path, data_points, username, account_id
+        template_path, output_path, data_points, username, account_id, region_code
     )
     
     await send_progress(session_id, "filling_template",
@@ -312,13 +326,13 @@ async def process_rate_calculation(session_id: str, username: str, password: str
         
         template_path = await download_template(session_id, google_client)
         
-        data_points, account_id = await fetch_coned_data(
+        data_points, account_id, region_code = await fetch_coned_data(
             session_id, username, password, start_date, end_date
         )
         
         spreadsheet_id, filled_count = await fill_and_upload(
             session_id, google_client, template_path, 
-            data_points, username, account_id
+            data_points, username, account_id, region_code
         )
         
         await calculate_and_send_results(

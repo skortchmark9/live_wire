@@ -4,3 +4,4 @@ __pycache__
 node_modules
 .env*
 *.p8
+logs/*.log

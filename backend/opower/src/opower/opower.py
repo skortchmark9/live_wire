@@ -5,7 +5,7 @@ from datetime import date, datetime
 from enum import Enum
 import json
 import logging
-from typing import Any, Optional, Union, Callable
+from typing import Any, Optional, Union, Callable, Dict
 from urllib.parse import urlencode
 
 import aiohttp
@@ -96,6 +96,7 @@ class Customer:
     """Data about a customer."""
 
     uuid: str
+    address: Optional[Dict[str, Any]] = None
 
 
 @dataclasses.dataclass
@@ -233,7 +234,7 @@ class Opower:
                 )
                 accounts.append(
                     Account(
-                        customer=Customer(uuid=customer["uuid"]),
+                        customer=Customer(uuid=customer["uuid"], address=customer.get("address")),
                         uuid=account_uuid,
                         utility_account_id=utility_account_id,
                         id=id,
@@ -292,7 +293,7 @@ class Opower:
                 forecasts.append(
                     Forecast(
                         account=Account(
-                            customer=Customer(uuid=customer["uuid"]),
+                            customer=Customer(uuid=customer["uuid"], address=customer.get("address")),
                             uuid=account_uuid,
                             utility_account_id=utility_account_id,
                             id=id,
@@ -436,18 +437,6 @@ class Opower:
             result = await self._async_get_request(url, {}, headers)
             self.meters = list(result["meters_ids"])
         return self.meters
-    
-    async def get_account_metadata(self, account: Account) -> list[str]:
-        """XXX
-        """
-        url = (
-            f"https://{self._get_subdomain()}.opower.com/{self._get_api_root()}"
-            f"/edge/apis/cws-real-time-ami-v1/cws/{self.utility.utilitycode()}"
-            f"/accounts/{account.uuid}"
-        )
-        headers = self._get_headers(account.customer.uuid)
-        result = await self._async_get_request(url, {}, headers)
-        return result
 
     async def async_get_realtime_usage_reads(
         self,

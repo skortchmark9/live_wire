@@ -10,7 +10,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from coned_client import ConEdClient
+# from coned_client import ConEdClient  # Not used - using rates_api.py instead
 from google_drive_client import GoogleDriveClient
 from excel_processor import ExcelProcessor
 from rate_calculator import RateCalculator

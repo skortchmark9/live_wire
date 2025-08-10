@@ -13,7 +13,7 @@ class ExcelProcessor:
     
     @staticmethod
     async def fill_template(template_path: str, output_path: str, data_points: List[Dict], 
-                           username: str = None, account_id: str = None) -> int:
+                           username: str = None, account_id: str = None, region_code: str = None) -> int:
         """Fill Excel template with ConEd usage data"""
         
         # Copy template to output path
@@ -36,6 +36,21 @@ class ExcelProcessor:
         if account_id:
             ws['B4'] = account_id
             print(f"Filled B4 with account ID: {account_id}")
+        
+        # Set region code in RATE CALCULATIONS sheet cell B1
+        if region_code:
+            # Look for RATE CALCULATIONS sheet
+            rate_calc_sheet = None
+            for sheet_name in wb.sheetnames:
+                if 'RATE CALCULATIONS' in sheet_name.upper():
+                    rate_calc_sheet = wb[sheet_name]
+                    break
+            
+            if rate_calc_sheet:
+                rate_calc_sheet['B1'] = region_code
+                print(f"Filled RATE CALCULATIONS B1 with region code: {region_code}")
+            else:
+                print(f"Warning: Could not find RATE CALCULATIONS sheet to set region code: {region_code}")
         
         # Sort data points by timestamp
         data_points.sort(key=lambda x: x['timestamp'])
