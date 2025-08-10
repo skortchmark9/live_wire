@@ -20,12 +20,8 @@ export function RateResults({ results, onReset }: RateResultsProps) {
     costs,
     best_rate,
     best_rate_cost,
-    worst_rate,
-    worst_rate_cost,
-    potential_savings,
     spreadsheet_url,
     data_points_count,
-    filled_rows,
   } = results;
 
   const formatCurrency = (amount: number) => {
@@ -34,11 +30,6 @@ export function RateResults({ results, onReset }: RateResultsProps) {
       currency: 'USD',
       minimumFractionDigits: 2,
     }).format(amount);
-  };
-
-  const getSavingsPercentage = () => {
-    if (!worst_rate_cost || worst_rate_cost === 0) return 0;
-    return (potential_savings / worst_rate_cost) * 100;
   };
 
   // Assume user is currently on EL1 plan

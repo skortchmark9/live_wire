@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React from 'react';
 import { useAuth } from '@electricity-tracker/shared';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header';
@@ -13,10 +13,10 @@ export default function RatesPage() {
   const auth = useAuth({ onNavigate });
   
   // Check if user is authenticated
-  if (auth.status === 'unauthenticated' || auth.status === 'authenticating' || auth.status === 'mfa_required') {
+  if (auth.status !== 'success') {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900">
-        <Header />
+        <Header activeTab="home" setActiveTab={() => {}} />
         <div className="max-w-2xl mx-auto p-6">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -34,7 +34,7 @@ export default function RatesPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
-      <Header />
+      <Header activeTab="home" setActiveTab={() => {}} />
       <div className="max-w-6xl mx-auto p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">

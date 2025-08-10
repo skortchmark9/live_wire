@@ -10,11 +10,23 @@ interface RateCalculationFlowProps {
   sessionId: string;
 }
 
+interface RateResults {
+  costs: Record<string, number>;
+  best_rate: string;
+  best_rate_cost: number;
+  worst_rate: string;
+  worst_rate_cost: number;
+  potential_savings: number;
+  spreadsheet_url: string;
+  data_points_count: number;
+  filled_rows: number;
+}
+
 interface ProgressUpdate {
   step: string;
   message: string;
   progress: number;
-  result?: any;
+  result?: RateResults;
 }
 
 type FlowState = 'form' | 'calculating' | 'completed' | 'error';
@@ -22,7 +34,7 @@ type FlowState = 'form' | 'calculating' | 'completed' | 'error';
 export function RateCalculationFlow({ sessionId }: RateCalculationFlowProps) {
   const [flowState, setFlowState] = useState<FlowState>('form');
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
-  const [results, setResults] = useState<any>(null);
+  const [results, setResults] = useState<RateResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
 
@@ -104,7 +116,7 @@ export function RateCalculationFlow({ sessionId }: RateCalculationFlowProps) {
       }, 10000);
       
       // Store interval ID for cleanup
-      (ws as any).heartbeatInterval = heartbeatInterval;
+      (ws as WebSocket & { heartbeatInterval?: NodeJS.Timeout }).heartbeatInterval = heartbeatInterval;
     };
 
     ws.onmessage = (event) => {
@@ -153,8 +165,9 @@ export function RateCalculationFlow({ sessionId }: RateCalculationFlowProps) {
       console.log('WebSocket closed');
       
       // Clean up heartbeat interval
-      if ((ws as any).heartbeatInterval) {
-        clearInterval((ws as any).heartbeatInterval);
+      const wsWithInterval = ws as WebSocket & { heartbeatInterval?: NodeJS.Timeout };
+      if (wsWithInterval.heartbeatInterval) {
+        clearInterval(wsWithInterval.heartbeatInterval);
       }
       
       setWebsocket(null);
@@ -172,7 +185,8 @@ export function RateCalculationFlow({ sessionId }: RateCalculationFlowProps) {
     } catch (err) {
       console.error('Error starting calculation:', err);
       console.error('Error details:', err);
-      setError(`Failed to start rate calculation: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(`Failed to start rate calculation: ${errorMessage}`);
       setFlowState('error');
       ws.close();
     }

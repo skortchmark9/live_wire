@@ -75,7 +75,7 @@ export function RateCalculationProgress({ progress }: RateCalculationProgressPro
 
       {/* Step Progress Indicators */}
       <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
-        {Object.entries(stepLabels).slice(0, -2).map(([stepKey, label], index) => {
+        {Object.entries(stepLabels).slice(0, -2).map(([stepKey, label]) => {
           const isActive = stepKey === step;
           const isCompleted = getStepOrder(stepKey) < getStepOrder(step);
           
