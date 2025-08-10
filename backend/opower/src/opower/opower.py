@@ -219,6 +219,7 @@ class Opower:
         for customer in await self._async_get_customers():
             utility_accounts = []
             utility_account_ids = []
+            print(customer)
             for account in customer["utilityAccounts"]:
                 utility_accounts.append(account)
                 utility_account_ids.append(account["preferredUtilityAccountId"])
@@ -435,6 +436,18 @@ class Opower:
             result = await self._async_get_request(url, {}, headers)
             self.meters = list(result["meters_ids"])
         return self.meters
+    
+    async def get_account_metadata(self, account: Account) -> list[str]:
+        """XXX
+        """
+        url = (
+            f"https://{self._get_subdomain()}.opower.com/{self._get_api_root()}"
+            f"/edge/apis/cws-real-time-ami-v1/cws/{self.utility.utilitycode()}"
+            f"/accounts/{account.uuid}"
+        )
+        headers = self._get_headers(account.customer.uuid)
+        result = await self._async_get_request(url, {}, headers)
+        return result
 
     async def async_get_realtime_usage_reads(
         self,

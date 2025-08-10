@@ -21,11 +21,30 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
+import rates_api
+
+# Configure logging with both console and file output
+import logging.handlers
+
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Console output
+        logging.handlers.RotatingFileHandler(
+            'logs/app.log',
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        )
+    ]
+)
+
 logger = logging.getLogger(__name__)
-print('hey')
+logger.info('Live Wire backend starting up')
 
 # Load environment variables from .env.local in development
 if os.getenv('RAILWAY_ENVIRONMENT_NAME') != 'production':
@@ -294,6 +313,8 @@ async def get_electricity_data_combined(
         "forecast_count": len(forecast_data)
     }
 
+# Include rates API router
+app.include_router(rates_api.router)
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=5050, reload=True)
