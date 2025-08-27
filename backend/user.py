@@ -18,6 +18,8 @@ class AuthenticationManager:
     def __init__(self):
         # In-memory storage for pending MFA sessions
         self.mfa_sessions: Dict[str, Dict] = {}
+        # In-memory storage for payment sessions
+        self.payment_sessions: Dict[str, Dict] = {}
         # Lock for thread-safe operations
         self.lock = asyncio.Lock()
     
@@ -217,6 +219,52 @@ class AuthenticationManager:
         for sid in expired_sessions:
             del self.mfa_sessions[sid]
             logger.info(f"Cleaned up expired session {sid}")
+    
+    # Payment session management methods
+    async def store_payment_session(
+        self, 
+        user_session_id: str, 
+        stripe_session_id: str,
+        product_type: str,
+        amount: int
+    ):
+        """
+        Store payment session information
+        """
+        async with self.lock:
+            self.payment_sessions[user_session_id] = {
+                "stripe_session_id": stripe_session_id,
+                "product_type": product_type,
+                "amount": amount,
+                "status": "pending",
+                "created_at": datetime.now(),
+                "payment_intent": None
+            }
+            logger.info(f"Stored payment session for user {user_session_id}, Stripe session {stripe_session_id}")
+    
+    async def update_payment_status(
+        self,
+        user_session_id: str,
+        stripe_session_id: str, 
+        status: str,
+        payment_intent: Optional[str] = None
+    ):
+        """
+        Update payment status after webhook
+        """
+        async with self.lock:
+            if user_session_id in self.payment_sessions:
+                self.payment_sessions[user_session_id]["status"] = status
+                if payment_intent:
+                    self.payment_sessions[user_session_id]["payment_intent"] = payment_intent
+                self.payment_sessions[user_session_id]["updated_at"] = datetime.now()
+                logger.info(f"Updated payment status for {user_session_id} to {status}")
+    
+    async def get_payment_session(self, user_session_id: str) -> Optional[Dict]:
+        """
+        Get payment session information
+        """
+        return self.payment_sessions.get(user_session_id)
 
 # Global instance
 auth_manager = AuthenticationManager()

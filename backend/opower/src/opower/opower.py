@@ -218,6 +218,7 @@ class Opower:
         """
         accounts = []
         for customer in await self._async_get_customers():
+            print(customer)
             utility_accounts = []
             utility_account_ids = []
             for account in customer["utilityAccounts"]:

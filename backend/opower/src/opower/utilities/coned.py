@@ -3,6 +3,8 @@
 from typing import Optional, Callable
 
 import aiohttp
+import logging
+
 from pyotp import TOTP
 
 from ..const import USER_AGENT
@@ -11,6 +13,7 @@ from .base import UtilityBase
 
 RETURN_URL = "/en/accounts-billing/my-account/energy-use"
 
+_LOGGER = logging.getLogger(__file__)
 
 class ConEd(UtilityBase):
     """Consolidated Edison (ConEd)."""
@@ -124,6 +127,7 @@ class ConEd(UtilityBase):
                                 )
                             redirectUrl = mfaResult["authRedirectUrl"]
                 else:
+                    _LOGGER.log('Login Failed', result)
                     raise InvalidAuth("Login Failed")
 
             assert redirectUrl

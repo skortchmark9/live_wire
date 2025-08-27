@@ -14,5 +14,8 @@ google-auth-httplib2==0.1.0
 google-api-python-client==2.100.0
 openpyxl==3.1.2
 
+# Payment processing
+stripe==7.0.0
+
 # Install patched version of opower
 -e ./opower
