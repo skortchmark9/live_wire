@@ -5,7 +5,7 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Request
 from pydantic import BaseModel
 import logging
 
@@ -66,7 +66,109 @@ class RateCalculationRequest(BaseModel):
 @router.get("/status")
 async def rates_status():
     """Debug endpoint to check if rates API is working"""
-    return {"status": "rates API is working", "endpoints": ["status", "calculate", "ws"]}
+    return {"status": "rates API is working", "endpoints": ["status", "calculate", "ws", "purchase-switch", "get-switch-details"]}
+
+@router.post("/purchase-switch")
+async def purchase_plan_switch(request: Request):
+    """Create Stripe checkout session for plan switching service"""
+    # Get session from cookie
+    session_id = request.cookies.get("user_session")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    session = auth_manager.get_session(session_id)
+    if not session or session["status"] != "success":
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    # Check if rate calculation exists
+    rate_calc = session.get('rate_calculation')
+    if not rate_calc:
+        raise HTTPException(status_code=400, detail="No rate calculation found. Please complete rate analysis first.")
+    
+    # Check if already purchased
+    if session.get('switch_purchased'):
+        raise HTTPException(status_code=400, detail="Switch service already purchased")
+    
+    # Block demo accounts
+    if session.get('is_demo'):
+        raise HTTPException(status_code=403, detail="Demo accounts cannot purchase switching service")
+    
+    from payments.stripe_client import stripe_client
+    
+    # Create checkout session for plan switch
+    app_domain = os.getenv('APP_DOMAIN', 'localhost:3000')
+    protocol = 'https' if app_domain != 'localhost:3000' else 'http'
+    success_url = f"{protocol}://{app_domain}/switch-success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{protocol}://{app_domain}/rates?payment=cancelled"
+    
+    try:
+        checkout_session = stripe_client.create_checkout_session(
+            price_amount=5000,  # $50.00
+            product_name="Electricity Plan Switch Service",
+            product_description=f"Save ${rate_calc['savings_amount']:.2f}/year with our plan switching service",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                'user_session_id': session_id,
+                'username': session.get('username', ''),
+                'product_type': 'plan_switch',
+                'savings_amount': str(rate_calc['savings_amount']),
+                'email': session.get('username', '')
+            }
+        )
+        
+        # Store payment session info
+        await auth_manager.store_payment_session(
+            user_session_id=session_id,
+            stripe_session_id=checkout_session['id'],
+            product_type='plan_switch',
+            amount=5000
+        )
+        
+        logger.info(f"Created plan switch checkout for {session.get('username')}, savings: ${rate_calc['savings_amount']:.2f}")
+        
+        return {
+            'checkout_url': checkout_session['url'],
+            'session_id': checkout_session['id']
+        }
+    except Exception as e:
+        logger.error(f"Error creating plan switch checkout: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/get-switch-details")
+async def get_switch_details(request: Request):
+    """Get plan switch details after payment"""
+    session_id = request.cookies.get("user_session")
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    session = auth_manager.get_session(session_id)
+    if not session or session["status"] != "success":
+        raise HTTPException(status_code=401, detail="Invalid session")
+    
+    # Check if payment was completed
+    payment_status = session.get('payment_status')
+    if payment_status != 'completed' and not session.get('switch_purchased'):
+        raise HTTPException(status_code=403, detail="Plan switch service not purchased")
+    
+    # Get stored rate calculation
+    rate_calc = session.get('rate_calculation')
+    if not rate_calc:
+        raise HTTPException(status_code=404, detail="Rate calculation not found")
+    
+    # Mark as purchased if payment completed
+    if payment_status == 'completed':
+        session['switch_purchased'] = True
+    
+    return {
+        "best_rate": rate_calc['best_rate'],
+        "best_rate_cost": rate_calc['best_rate_cost'],
+        "current_plan": rate_calc['current_plan'],
+        "current_plan_cost": rate_calc['current_plan_cost'],
+        "savings_amount": rate_calc['savings_amount'],
+        "costs": rate_calc['costs'],
+        "switch_purchased": True
+    }
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
@@ -288,24 +390,66 @@ async def calculate_and_send_results(session_id: str, google_client: GoogleDrive
     spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
     
     best_rate = worst_rate = potential_savings = None
+    current_plan = 'EL1'  # Default assumption, could be detected from account
+    current_plan_cost = costs.get(current_plan, 0) if costs else 0
+    
     if costs:
         best_rate = min(costs.items(), key=lambda x: x[1])
         worst_rate = max(costs.items(), key=lambda x: x[1])
         potential_savings = worst_rate[1] - best_rate[1]
+        
+        # Calculate savings from current plan
+        savings_from_current = current_plan_cost - best_rate[1] if current_plan_cost > 0 else 0
+        
+        # Store complete results in session (server-side only)
+        session = auth_manager.get_session(session_id)
+        if session:
+            session['rate_calculation'] = {
+                'costs': costs,
+                'best_rate': best_rate[0],
+                'best_rate_cost': best_rate[1],
+                'current_plan': current_plan,
+                'current_plan_cost': current_plan_cost,
+                'savings_amount': savings_from_current,
+                'spreadsheet_id': spreadsheet_id
+            }
+            logger.info(f"Stored rate calculation for session {session_id}: Save ${savings_from_current:.2f} with {best_rate[0]}")
+    
+    # Send limited results to frontend (no plan names if not paid)
+    session = auth_manager.get_session(session_id)
+    has_purchased_switch = session and session.get('switch_purchased', False)
+    
+    if has_purchased_switch:
+        # Paid user gets full details
+        result_data = {
+            "costs": costs,
+            "best_rate": best_rate[0] if best_rate else None,
+            "best_rate_cost": best_rate[1] if best_rate else None,
+            "worst_rate": worst_rate[0] if worst_rate else None,
+            "worst_rate_cost": worst_rate[1] if worst_rate else None,
+            "current_plan": current_plan,
+            "current_plan_cost": current_plan_cost,
+            "savings_amount": savings_from_current,
+            "potential_savings": potential_savings,
+            "spreadsheet_url": spreadsheet_url,
+            "data_points_count": len(data_points),
+            "filled_rows": filled_count,
+            "switch_purchased": True
+        }
+    else:
+        # Free user only sees savings amount
+        result_data = {
+            "current_plan_cost": current_plan_cost,
+            "savings_amount": savings_from_current,
+            "data_points_count": len(data_points),
+            "filled_rows": filled_count,
+            "has_savings": savings_from_current > 100,  # Flag for showing payment CTA
+            "switch_purchased": False
+        }
     
     await send_progress(session_id, "completed",
                        "Rate calculation completed!", 100,
-                       result={
-                           "costs": costs,
-                           "best_rate": best_rate[0] if best_rate else None,
-                           "best_rate_cost": best_rate[1] if best_rate else None,
-                           "worst_rate": worst_rate[0] if worst_rate else None,
-                           "worst_rate_cost": worst_rate[1] if worst_rate else None,
-                           "potential_savings": potential_savings,
-                           "spreadsheet_url": spreadsheet_url,
-                           "data_points_count": len(data_points),
-                           "filled_rows": filled_count
-                       })
+                       result=result_data)
 
 async def process_rate_calculation(session_id: str, username: str, password: str,
                                   start_date_str: str, end_date_str: str):
