@@ -59,6 +59,10 @@ async def create_checkout_session(request: CreateCheckoutRequest):
     if not session or session["status"] not in ["success", "authenticated"]:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
     
+    # Block demo sessions from making payments
+    if session.get("is_demo"):
+        raise HTTPException(status_code=403, detail="Demo accounts cannot make purchases. Please login with a real account.")
+    
     # Get product details (either from request or predefined)
     if request.product_type in PRODUCTS:
         product = PRODUCTS[request.product_type]

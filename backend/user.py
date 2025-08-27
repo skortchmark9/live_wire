@@ -2,24 +2,20 @@
 User authentication module for ConEd login with MFA support
 """
 import aiohttp
-import sys
-from pathlib import Path
 from data_collectors.electricity_collector import get_demo_api
 from opower import Opower
 import asyncio
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AuthenticationManager:
     def __init__(self):
-        # In-memory storage for pending MFA sessions
+        # In-memory storage for sessions (includes auth and payment data)
         self.mfa_sessions: Dict[str, Dict] = {}
-        # In-memory storage for payment sessions
-        self.payment_sessions: Dict[str, Dict] = {}
         # Lock for thread-safe operations
         self.lock = asyncio.Lock()
     
@@ -45,6 +41,12 @@ class AuthenticationManager:
                 "result": None,
                 "access_token": None,
                 "is_demo": False,
+                # Payment data
+                "payment_status": None,
+                "stripe_session_id": None,
+                "product_type": None,
+                "payment_amount": None,
+                "payment_intent": None,
             }
             
             # Clean up old sessions (older than 5 minutes)
@@ -72,6 +74,12 @@ class AuthenticationManager:
                 "result": None,
                 "access_token": api.access_token,
                 "is_demo": True,
+                # Payment data
+                "payment_status": None,
+                "stripe_session_id": None,
+                "product_type": None,
+                "payment_amount": None,
+                "payment_intent": None,
             }
             
             # Clean up old sessions (older than 5 minutes)
@@ -220,7 +228,7 @@ class AuthenticationManager:
             del self.mfa_sessions[sid]
             logger.info(f"Cleaned up expired session {sid}")
     
-    # Payment session management methods
+    # Payment management methods (now integrated into main sessions)
     async def store_payment_session(
         self, 
         user_session_id: str, 
@@ -229,18 +237,16 @@ class AuthenticationManager:
         amount: int
     ):
         """
-        Store payment session information
+        Store payment information in the existing user session
         """
         async with self.lock:
-            self.payment_sessions[user_session_id] = {
-                "stripe_session_id": stripe_session_id,
-                "product_type": product_type,
-                "amount": amount,
-                "status": "pending",
-                "created_at": datetime.now(),
-                "payment_intent": None
-            }
-            logger.info(f"Stored payment session for user {user_session_id}, Stripe session {stripe_session_id}")
+            session = self.mfa_sessions.get(user_session_id)
+            if session:
+                session["stripe_session_id"] = stripe_session_id
+                session["product_type"] = product_type
+                session["payment_amount"] = amount
+                session["payment_status"] = "pending"
+                logger.info(f"Stored payment data for user {user_session_id}, Stripe session {stripe_session_id}")
     
     async def update_payment_status(
         self,
@@ -250,21 +256,30 @@ class AuthenticationManager:
         payment_intent: Optional[str] = None
     ):
         """
-        Update payment status after webhook
+        Update payment status in the user session after webhook
         """
         async with self.lock:
-            if user_session_id in self.payment_sessions:
-                self.payment_sessions[user_session_id]["status"] = status
+            session = self.mfa_sessions.get(user_session_id)
+            if session:
+                session["payment_status"] = status
                 if payment_intent:
-                    self.payment_sessions[user_session_id]["payment_intent"] = payment_intent
-                self.payment_sessions[user_session_id]["updated_at"] = datetime.now()
+                    session["payment_intent"] = payment_intent
                 logger.info(f"Updated payment status for {user_session_id} to {status}")
     
     async def get_payment_session(self, user_session_id: str) -> Optional[Dict]:
         """
-        Get payment session information
+        Get payment information from user session
         """
-        return self.payment_sessions.get(user_session_id)
+        session = self.mfa_sessions.get(user_session_id)
+        if session and session.get("stripe_session_id"):
+            return {
+                "stripe_session_id": session.get("stripe_session_id"),
+                "product_type": session.get("product_type"),
+                "amount": session.get("payment_amount"),
+                "status": session.get("payment_status"),
+                "payment_intent": session.get("payment_intent")
+            }
+        return None
 
 # Global instance
 auth_manager = AuthenticationManager()
