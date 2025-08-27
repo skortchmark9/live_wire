@@ -17,5 +17,10 @@ openpyxl==3.1.2
 # Payment processing
 stripe==7.0.0
 
+# Document generation and email
+reportlab==4.0.4
+Pillow==10.0.0
+sendgrid==6.10.0
+
 # Install patched version of opower
 -e ./opower
