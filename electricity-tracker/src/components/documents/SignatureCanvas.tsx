@@ -42,12 +42,12 @@ export default function SignatureCanvas({ onSignatureChange, className = '' }: S
     let x, y;
     if ('touches' in e) {
       // Touch event
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
+      x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+      y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
     } else {
       // Mouse event
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
+      x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      y = (e.clientY - rect.top) * (canvas.height / rect.height);
     }
 
     ctx.beginPath();
@@ -68,12 +68,12 @@ export default function SignatureCanvas({ onSignatureChange, className = '' }: S
     if ('touches' in e) {
       // Touch event
       e.preventDefault(); // Prevent scrolling
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
+      x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+      y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
     } else {
       // Mouse event
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
+      x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      y = (e.clientY - rect.top) * (canvas.height / rect.height);
     }
 
     ctx.lineTo(x, y);
