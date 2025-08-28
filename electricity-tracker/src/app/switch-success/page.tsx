@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import SignatureCanvas from '@/components/documents/SignatureCanvas';
 
@@ -28,7 +28,7 @@ interface SigningStatus {
   next_step: string;
 }
 
-export default function SwitchSuccessPage() {
+function SwitchSuccessPageContent() {
   const searchParams = useSearchParams();
   const stripeSessionId = searchParams.get('session_id');
   const [switchDetails, setSwitchDetails] = useState<SwitchDetails | null>(null);
@@ -42,18 +42,7 @@ export default function SwitchSuccessPage() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (stripeSessionId) {
-      fetchSwitchDetails();
-      fetchLOAPreview();
-      fetchSigningStatus();
-    } else {
-      setError('No payment session found');
-      setLoading(false);
-    }
-  }, [stripeSessionId]);
-
-  const fetchSwitchDetails = async () => {
+  const fetchSwitchDetails = useCallback(async () => {
     try {
       // First verify the payment
       const paymentResponse = await fetch(
@@ -83,9 +72,9 @@ export default function SwitchSuccessPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [stripeSessionId]);
 
-  const fetchLOAPreview = async () => {
+  const fetchLOAPreview = useCallback(async () => {
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/documents/loa-preview`,
@@ -100,9 +89,9 @@ export default function SwitchSuccessPage() {
       console.error('Error fetching LOA preview:', err);
       // Non-critical error, don't fail the whole page
     }
-  };
+  }, []);
 
-  const fetchSigningStatus = async () => {
+  const fetchSigningStatus = useCallback(async () => {
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5050'}/api/documents/signing-status`,
@@ -117,7 +106,7 @@ export default function SwitchSuccessPage() {
       console.error('Error fetching signing status:', err);
       // Non-critical error, don't fail the whole page
     }
-  };
+  }, []);
 
   const handleSubmitSignature = async () => {
     if (!signature || !agreed) {
@@ -157,6 +146,17 @@ export default function SwitchSuccessPage() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (stripeSessionId) {
+      fetchSwitchDetails();
+      fetchLOAPreview();
+      fetchSigningStatus();
+    } else {
+      setError('No payment session found');
+      setLoading(false);
+    }
+  }, [stripeSessionId, fetchSwitchDetails, fetchLOAPreview, fetchSigningStatus]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -204,7 +204,7 @@ export default function SwitchSuccessPage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
             <div className="text-yellow-500 text-4xl mb-4">⚠️</div>
             <h1 className="text-2xl font-bold text-yellow-800 mb-2">No switch details found</h1>
-            <p className="text-yellow-600 mb-4">We couldn't find your plan switch information.</p>
+            <p className="text-yellow-600 mb-4">We couldn&apos;t find your plan switch information.</p>
             <a 
               href="/rates" 
               className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -339,8 +339,8 @@ export default function SwitchSuccessPage() {
                   <div className="mt-6 pt-6 border-t border-gray-200">
                     <h3 className="font-semibold text-gray-900 mb-2">Next Steps:</h3>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      <li>• We'll submit your authorization to Con Edison</li>
-                      <li>• You'll receive email updates on progress</li>
+                      <li>• We&apos;ll submit your authorization to Con Edison</li>
+                      <li>• You&apos;ll receive email updates on progress</li>
                       <li>• Your new rate takes effect in 1-2 billing cycles</li>
                     </ul>
                   </div>
@@ -431,7 +431,7 @@ export default function SwitchSuccessPage() {
             Run Another Analysis
           </a>
           <a 
-            href="/" 
+            href="/dashboard" 
             className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Back to Dashboard
@@ -439,5 +439,20 @@ export default function SwitchSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SwitchSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SwitchSuccessPageContent />
+    </Suspense>
   );
 }

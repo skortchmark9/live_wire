@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface RateResultsProps {
@@ -26,9 +26,15 @@ interface RateResultsProps {
   onReset: () => void;
 }
 
-export function RateResults({ results, onReset }: RateResultsProps) {
+function RateResultsContent({ results, onReset }: RateResultsProps) {
   const [isPurchasing, setIsPurchasing] = useState(false);
-  const [switchDetails, setSwitchDetails] = useState<any>(null);
+  const [switchDetails, setSwitchDetails] = useState<{
+    best_rate: string;
+    best_rate_cost: number;
+    current_plan: string;
+    current_plan_cost: number;
+    savings_amount: number;
+  } | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const searchParams = useSearchParams();
   
@@ -42,7 +48,7 @@ export function RateResults({ results, onReset }: RateResultsProps) {
       // Already purchased, fetch details
       fetchSwitchDetails();
     }
-  }, [searchParams, results.switch_purchased]);
+  }, [searchParams, results.switch_purchased, switchDetails]);
 
   const fetchSwitchDetails = async () => {
     setIsLoadingDetails(true);
@@ -194,12 +200,12 @@ export function RateResults({ results, onReset }: RateResultsProps) {
               to save <strong>{formatCurrency(savingsAmount)}</strong> per year.
             </p>
             <p className="text-blue-600 dark:text-blue-400 mt-2 text-sm">
-              Next steps: We'll send you instructions to complete your plan switch.
+              Next steps: We&apos;ll send you instructions to complete your plan switch.
             </p>
           </div>
 
           {/* Rate Comparison Table (only for paid users) */}
-          {displayData.costs && (
+          {('costs' in displayData) && displayData.costs && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -283,10 +289,10 @@ export function RateResults({ results, onReset }: RateResultsProps) {
             <div className="text-center">
               <div className="text-4xl mb-4">💰</div>
               <h3 className="text-2xl font-bold text-yellow-800 dark:text-yellow-200 mb-4">
-                You're Overpaying by {formatCurrency(savingsAmount)} Per Year!
+                You&apos;re Overpaying by {formatCurrency(savingsAmount)} Per Year!
               </h3>
               <p className="text-yellow-700 dark:text-yellow-300 mb-6 max-w-2xl mx-auto">
-                We've identified a better electricity rate plan that could save you money. 
+                We&apos;ve identified a better electricity rate plan that could save you money. 
                 Get our plan switching service to unlock your savings.
               </p>
               
@@ -340,7 +346,7 @@ export function RateResults({ results, onReset }: RateResultsProps) {
                 </div>
               ) : (
                 <p className="text-yellow-700 dark:text-yellow-300">
-                  You're already on an optimal plan or savings are minimal.
+                  You&apos;re already on an optimal plan or savings are minimal.
                 </p>
               )}
             </div>
@@ -359,5 +365,18 @@ export function RateResults({ results, onReset }: RateResultsProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+export function RateResults({ results, onReset }: RateResultsProps) {
+  return (
+    <Suspense fallback={
+      <div className="text-center p-8">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading results...</p>
+      </div>
+    }>
+      <RateResultsContent results={results} onReset={onReset} />
+    </Suspense>
   );
 }

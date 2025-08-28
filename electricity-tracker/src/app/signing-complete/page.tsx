@@ -85,7 +85,7 @@ export default function SigningCompletePage() {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
             <div className="text-yellow-500 text-4xl mb-4">⚠️</div>
             <h1 className="text-2xl font-bold text-yellow-800 mb-2">Document Not Signed</h1>
-            <p className="text-yellow-600 mb-4">We couldn't find a signed authorization document.</p>
+            <p className="text-yellow-600 mb-4">We couldn&apos;t find a signed authorization document.</p>
             <button 
               onClick={() => router.push('/sign-authorization')}
               className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors mr-4"
@@ -173,7 +173,7 @@ export default function SigningCompletePage() {
               <span className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-sm mr-3">1</span>
               <div>
                 <p className="font-medium text-blue-800">Document Processing</p>
-                <p className="text-blue-700 text-sm">We'll prepare your signed authorization for submission to Con Edison.</p>
+                <p className="text-blue-700 text-sm">We&apos;ll prepare your signed authorization for submission to Con Edison.</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -194,7 +194,7 @@ export default function SigningCompletePage() {
               <span className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-sm mr-3">4</span>
               <div>
                 <p className="font-medium text-blue-800">Start Saving</p>
-                <p className="text-blue-700 text-sm">You'll begin seeing savings on your electricity bill!</p>
+                <p className="text-blue-700 text-sm">You&apos;ll begin seeing savings on your electricity bill!</p>
               </div>
             </div>
           </div>

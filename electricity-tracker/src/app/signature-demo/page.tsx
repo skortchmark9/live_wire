@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import SignatureCanvas from '@/components/documents/SignatureCanvas';
 
 export default function SignatureDemoPage() {
@@ -34,7 +35,7 @@ export default function SignatureDemoPage() {
             <div className="mt-6">
               <h3 className="font-semibold text-gray-900 mb-2">Captured Signature:</h3>
               <div className="border border-gray-300 rounded p-2">
-                <img src={signature} alt="Signature" className="max-w-full" />
+                <Image src={signature} alt="Signature" className="max-w-full" width={400} height={150} />
               </div>
             </div>
           )}

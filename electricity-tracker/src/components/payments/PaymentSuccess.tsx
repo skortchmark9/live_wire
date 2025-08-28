@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 
 interface PaymentDetails {
   payment_status: string;
@@ -11,7 +12,7 @@ interface PaymentDetails {
   product_type: string;
 }
 
-export default function PaymentSuccess() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
@@ -118,9 +119,9 @@ export default function PaymentSuccess() {
           </svg>
           <h2 className="text-2xl font-bold text-yellow-700 mb-2">Payment Pending</h2>
           <p className="text-yellow-600">Your payment is still being processed. Please check back later.</p>
-          <a href="/" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
+          <Link href="/" className="mt-4 inline-block text-blue-600 hover:text-blue-800">
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -158,11 +159,26 @@ export default function PaymentSuccess() {
         </p>
         
         <div className="mt-6 space-x-4">
-          <a href="/" className="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors">
+          <Link href="/" className="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors">
             Return to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccess() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-md mx-auto mt-8 p-6 bg-gray-50 rounded-lg">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading payment details...</p>
+        </div>
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }

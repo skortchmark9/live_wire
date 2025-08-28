@@ -74,7 +74,7 @@ export default function SignAuthorizationPage() {
         throw new Error(errorData.detail || 'Failed to submit signature');
       }
 
-      const result = await response.json();
+      await response.json();
       
       // Redirect to completion page
       router.push('/signing-complete');
