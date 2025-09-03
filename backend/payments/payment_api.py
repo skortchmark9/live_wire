@@ -75,11 +75,20 @@ async def create_checkout_session(request: CreateCheckoutRequest):
         product_name = request.product_name
         product_description = request.product_description
     
-    # Prepare success and cancel URLs
-    app_domain = os.getenv('APP_DOMAIN', 'localhost:3000')
-    protocol = 'https' if app_domain != 'localhost:3000' else 'http'
-    success_url = f"{protocol}://{app_domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{protocol}://{app_domain}/pricing"
+    from urllib.parse import urlparse
+    
+    # Get origin from request headers
+    origin = request.headers.get('origin') or request.headers.get('referer')
+    if origin:
+        # Parse and use just the scheme + netloc
+        parsed = urlparse(origin)
+        app_domain = f"{parsed.scheme}://{parsed.netloc}"
+    else:
+        # No fallback - require origin header
+        raise HTTPException(status_code=400, detail="Origin header required")
+    
+    success_url = f"{app_domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{app_domain}/pricing"
     
     try:
         # Create Stripe checkout session with metadata

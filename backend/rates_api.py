@@ -94,12 +94,20 @@ async def purchase_plan_switch(request: Request):
         raise HTTPException(status_code=403, detail="Demo accounts cannot purchase switching service")
     
     from payments.stripe_client import stripe_client
+    from urllib.parse import urlparse
     
-    # Create checkout session for plan switch
-    app_domain = os.getenv('APP_DOMAIN', 'localhost:3000')
-    protocol = 'https' if app_domain != 'localhost:3000' else 'http'
-    success_url = f"{protocol}://{app_domain}/switch-success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel_url = f"{protocol}://{app_domain}/rates?payment=cancelled"
+    # Get origin from request headers
+    origin = request.headers.get('origin') or request.headers.get('referer')
+    if origin:
+        # Parse and use just the scheme + netloc
+        parsed = urlparse(origin)
+        app_domain = f"{parsed.scheme}://{parsed.netloc}"
+    else:
+        # No fallback - require origin header
+        raise HTTPException(status_code=400, detail="Origin header required")
+    
+    success_url = f"{app_domain}/switch-success?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{app_domain}/rates?payment=cancelled"
     
     try:
         checkout_session = stripe_client.create_checkout_session(
