@@ -89,7 +89,23 @@ class ConEdBrowserAutomation:
             except asyncio.TimeoutError:
                 print("No MFA required, proceeding...")
 
-            return True
+            # Wait for successful navigation away from login page
+            print("Verifying successful login...")
+            try:
+                # Wait for URL to change from login page
+                await self.page.wait_for_function(
+                    "!window.location.href.includes('/login')",
+                    timeout=10000
+                )
+
+                # Wait for the specific bill download button that only appears on the logged-in account page
+                await self.page.wait_for_selector('[data-module="ViewCurrentBill"]', timeout=10000)
+
+                print("✅ Login successful - reached account page!")
+                return True
+            except asyncio.TimeoutError:
+                print("❌ Login verification failed - still on login page or MFA rejected")
+                return False
 
         except Exception as e:
             print(f"❌ Login failed: {e}")
