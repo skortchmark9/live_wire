@@ -1,3 +1,5 @@
 playwright==1.48.0
 python-dotenv==1.0.1
 aiofiles==24.1.0
+pandas==2.2.3
+PyPDF2==3.0.1
