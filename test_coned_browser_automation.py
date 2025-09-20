@@ -73,6 +73,15 @@ async def test_browser_login():
             else:
                 print("⚠️ Could not download bill (may need to adjust selectors)")
 
+            # Try to download usage data
+            print("\nAttempting to download energy usage data...")
+            usage_path = await browser.download_energy_usage_data()
+
+            if usage_path:
+                print(f"✅ Usage data successfully downloaded to: {usage_path}")
+            else:
+                print("⚠️ Could not download usage data (may need to adjust selectors)")
+
             # Take final screenshot
             await browser.take_screenshot("final_state")
 

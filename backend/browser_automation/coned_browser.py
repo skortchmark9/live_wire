@@ -116,6 +116,72 @@ class ConEdBrowserAutomation:
             return False
 
 
+    async def download_energy_usage_data(self):
+        """Navigate to energy usage page and export 1 year of data"""
+        try:
+            print("Navigating to energy usage page...")
+
+            # Navigate to the energy usage page
+            await self.page.goto('https://www.coned.com/en/accounts-billing/my-account/energy-use?tab1=sectionComparisonsAnalysis-2&tab2=sectionSimilarHomes-1')
+
+            # Wait for page to load
+            await self.page.wait_for_load_state('networkidle')
+
+            # Click the green button to open export form
+            print("Clicking green button to open export form...")
+            await self.page.wait_for_selector('.green-button-container button', timeout=10000)
+            await self.page.click('.green-button-container button')
+
+            # Wait for form to appear
+            print("Waiting for export form to appear...")
+            await asyncio.sleep(2)
+
+            # Click the period-date radio button via its label (which is intercepting clicks)
+            print("Selecting date period option...")
+            await self.page.wait_for_selector('label[for="period-date"]', timeout=10000)
+            await self.page.click('label[for="period-date"]')
+
+            # Calculate date 1 year ago from today
+            from datetime import datetime, timedelta
+            one_year_ago = datetime.now() - timedelta(days=365)
+            start_date = one_year_ago.strftime('%m/%d/%Y')
+
+            print(f"Setting start date to: {start_date}")
+
+            # Clear and set the start date input
+            await self.page.wait_for_selector('#date-selector--select-date-from', timeout=10000)
+            await self.page.fill('#date-selector--select-date-from', '')
+            await self.page.type('#date-selector--select-date-from', start_date, delay=50)
+
+            # Click the Export button
+            print("Clicking Export button...")
+            export_button_selector = '.usage-export-submit-container .button.primary'
+            await self.page.wait_for_selector(export_button_selector, timeout=10000)
+
+            # Set up download handler before clicking export
+            async with self.page.expect_download() as download_info:
+                await self.page.click(export_button_selector)
+                print("Export button clicked, waiting for download...")
+
+                # Wait for the download to complete
+                download = await download_info.value
+
+                # Save the download
+                filename = f"coned_usage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+                filepath = os.path.join(self.download_dir, filename)
+                await download.save_as(filepath)
+                print(f"✅ Usage data downloaded to: {filepath}")
+
+                return filepath
+
+        except Exception as e:
+            print(f"❌ Failed to download usage data: {e}")
+            # Take screenshot for debugging
+            screenshot_path = os.path.join(self.download_dir, f"usage_export_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+            await self.page.screenshot(path=screenshot_path)
+            print(f"Screenshot saved to: {screenshot_path}")
+            return None
+
     async def download_recent_bill(self):
         """Download the most recent bill"""
         try:
