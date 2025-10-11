@@ -20,7 +20,7 @@ def main():
     download_dir = "./coned_downloads"
     processor = ConEdDataProcessor(download_dir=download_dir)
 
-    # Check if download directory exists
+    # Check if download directory exisst
     if not os.path.exists(download_dir):
         print(f"❌ Download directory not found: {download_dir}")
         print("Run the browser automation test first to download files.")
