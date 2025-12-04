@@ -176,11 +176,13 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
     // Build optimized weather lookup with downsampled data
-    const weatherLookup = new Map<string, number>()
+    // Use time in milliseconds as key for reliable matching across different timestamp formats
+    const weatherLookup = new Map<number, number>()
     if (weatherData?.data) {
       const downsampledWeather = downsampleWeatherTo15Minutes(weatherData.data)
       downsampledWeather.forEach(w => {
-        weatherLookup.set(w.timestamp, w.temperature_f)
+        const timeMs = new Date(w.timestamp).getTime()
+        weatherLookup.set(timeMs, w.temperature_f)
       })
     }
 
@@ -204,7 +206,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       const pointTime = new Date(d.timestamp).getTime()
       return {
         ...d,
-        temperature: weatherLookup.get(d.timestamp) || undefined,
+        temperature: weatherLookup.get(pointTime) || undefined,
         AC: acTimestamps.has(pointTime) ? 1 : null // Binary indicator - only show when AC is active
       }
     })
