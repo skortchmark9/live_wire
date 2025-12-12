@@ -19,7 +19,6 @@ stripe==7.0.0
 
 # Document generation and email
 reportlab==4.0.4
-Pillow==10.0.0
 boto3==1.34.0
 
 # Install patched version of opower

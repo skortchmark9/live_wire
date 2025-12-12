@@ -28,7 +28,7 @@ interface LoadDisaggregationProps {
 
 export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
   const [detectedAC, setDetectedAC] = useState<ACUsage[]>([])
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'yesterday' | '24h' | '7d' | '30d'>('yesterday')
+  const [selectedTimeRange, setSelectedTimeRange] = useState<'yesterday' | '24h' | '7d' | '30d' | '1y'>('yesterday')
   const [baselineWatts, setBaselineWatts] = useState<number>(0)
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
 
@@ -47,7 +47,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       endTime = new Date(yesterday)
       endTime.setDate(endTime.getDate() + 1)
     } else {
-      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : selectedTimeRange === '30d' ? 720 : 8760
       cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
     }
     
@@ -87,11 +87,12 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
     // Downsample weather data to 15-minute intervals
     const downsampledWeather = downsampleWeatherTo15Minutes(weather)
-    
-    // Create weather lookup map with downsampled data
-    const weatherMap = new Map()
+
+    // Create weather lookup map with downsampled data (use milliseconds for reliable matching)
+    const weatherMap = new Map<number, number>()
     downsampledWeather.forEach(w => {
-      weatherMap.set(w.timestamp, w.temperature_f)
+      const timeMs = new Date(w.timestamp).getTime()
+      weatherMap.set(timeMs, w.temperature_f)
     })
 
     // Calculate baseline usage with extended data
@@ -107,7 +108,8 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000 // 15-minute intervals
       
       // Get temperature for this event
-      const temperature = weatherMap.get(recentData[event.startIndex].timestamp) || undefined
+      const eventTimeMs = new Date(recentData[event.startIndex].timestamp).getTime()
+      const temperature = weatherMap.get(eventTimeMs) || undefined
       
       // Calculate confidence
       let confidence = 0.6
@@ -154,7 +156,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       endTime = new Date(yesterday)
       endTime.setDate(endTime.getDate() + 1)
     } else {
-      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+      const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : selectedTimeRange === '30d' ? 720 : 8760
       cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
     }
     
@@ -227,30 +229,41 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
   const totalDetectedKwh = detectedAC.reduce((sum, ac) => sum + ac.estimatedKwh, 0)
   const totalDetectedCost = detectedAC.reduce((sum, ac) => sum + ac.estimatedCost, 0)
-  const acWithTemp = detectedAC.filter(ac => ac.avgTemperature && ac.avgTemperature > 0)
-  const avgTemp = acWithTemp.length > 0 
-    ? acWithTemp.reduce((sum, ac) => sum + ac.avgTemperature!, 0) / acWithTemp.length 
-    : 0
 
   // Calculate total usage for the selected period
   const now = new Date()
   let cutoff: Date
   let endTime: Date = now
-  
+
   if (selectedTimeRange === 'yesterday') {
     // Get yesterday's date range (midnight to midnight)
     const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
     yesterday.setHours(0, 0, 0, 0)
     cutoff = yesterday
-    
+
     endTime = new Date(yesterday)
     endTime.setDate(endTime.getDate() + 1)
   } else {
-    const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : 720
+    const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : selectedTimeRange === '30d' ? 720 : 8760
     cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
   }
-  
+
+  // Calculate average temperature for the selected time period
+  const avgTemp = weatherData?.data
+    ? (() => {
+        const filteredWeather = weatherData.data.filter(w => {
+          const weatherTime = new Date(w.timestamp)
+          if (selectedTimeRange === 'yesterday') {
+            return weatherTime >= cutoff && weatherTime < endTime
+          }
+          return weatherTime >= cutoff
+        })
+        if (filteredWeather.length === 0) return 0
+        return filteredWeather.reduce((sum, w) => sum + w.temperature_f, 0) / filteredWeather.length
+      })()
+    : 0
+
   const totalPeriodKwh = electricityData
     .filter(d => {
       if (d.consumption_kwh === null) return false
@@ -270,7 +283,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
         <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">AC Usage Analysis</h2>
         <div className="flex gap-1 sm:gap-2 sm:ml-auto">
-          {(['yesterday', '24h', '7d', '30d'] as const).map(range => (
+          {(['yesterday', '24h', '7d', '30d', '1y'] as const).map(range => (
             <button
               key={range}
               onClick={() => setSelectedTimeRange(range)}
@@ -278,7 +291,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
                 selectedTimeRange === range ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
               }`}
             >
-              {range === 'yesterday' ? 'Yesterday' : range === '24h' ? '24h' : range === '7d' ? '7d' : range === '30d' ? '30d' : range}
+              {range === 'yesterday' ? 'Yesterday' : range === '24h' ? '24h' : range === '7d' ? '7d' : range === '30d' ? '30d' : range === '1y' ? '1y' : range}
             </button>
           ))}
         </div>
@@ -318,6 +331,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
                 const date = parseISO(value)
                 if (selectedTimeRange === 'yesterday' || selectedTimeRange === '24h') return format(date, 'HH:mm')
                 if (selectedTimeRange === '7d') return format(date, 'MMM dd')
+                if (selectedTimeRange === '1y') return format(date, 'MMM')
                 return format(date, 'MMM dd')
               }}
             />

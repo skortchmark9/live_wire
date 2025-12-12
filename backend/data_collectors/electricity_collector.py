@@ -98,15 +98,15 @@ async def collect_electricity_data(authenticated_api: Opower, start_date: Option
     
     Args:
         authenticated_api: Authenticated Opower API instance
-        start_date: Start date for data collection (optional, defaults to 30 days ago)
+        start_date: Start date for data collection (optional, defaults to 1 year ago)
         end_date: End date for data collection (optional, defaults to tomorrow)
-        
+
     Returns:
         Dictionary with electricity usage data and forecast data
-    """    
-    # Set date range for recent data (last 30 days to current)
+    """
+    # Set date range for recent data (last 1 year to current)
     if start_date is None:
-        start_date = (datetime.now() - timedelta(days=30)).date()
+        start_date = (datetime.now() - timedelta(days=365)).date()
     if end_date is None:
         end_date = datetime.now().date() + timedelta(days=1)
     
