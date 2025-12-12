@@ -80,12 +80,12 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
           <button
             onClick={() => setActiveTab('disaggregation')}
             className={`flex-1 py-2 px-3 text-center text-sm font-medium transition-colors border-l border-gray-200 dark:border-gray-700 ${
-              activeTab === 'disaggregation' 
-                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
+              activeTab === 'disaggregation'
+                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                 : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
             }`}
           >
-            AC
+            Heating / Cooling
           </button>
         </div>
       </div>
@@ -123,12 +123,12 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
             <button
               onClick={() => setActiveTab('disaggregation')}
               className={`px-4 py-2 rounded-md transition-colors ${
-                activeTab === 'disaggregation' 
-                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium' 
+                activeTab === 'disaggregation'
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-medium'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
             >
-              AC
+              Heating / Cooling
             </button>
           </div>
         </div>
@@ -182,7 +182,7 @@ export function Header({ activeTab, setActiveTab }: HeaderProps) {
                   <ul className="space-y-1 ml-4 text-sm">
                     <li>• Using E1 Rates</li>
                     <li>• Using supply/delivery charges from my apartment last month</li>
-                    <li>• That the only reason your electricity usage would go above baseline is due to AC usage</li>
+                    <li>• That the only reason your electricity usage would go above baseline is due to HVAC usage</li>
                   </ul>
                 </div>
                 <p className="text-sm">

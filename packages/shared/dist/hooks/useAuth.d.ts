@@ -20,6 +20,6 @@ export declare function useAuth(options?: UseAuthOptions): {
     submitMFA: (mfaCode: string) => Promise<any>;
     demoLogin: () => Promise<void>;
     reset: () => void;
-    logout: () => void;
+    logout: () => Promise<void>;
 };
 //# sourceMappingURL=useAuth.d.ts.map

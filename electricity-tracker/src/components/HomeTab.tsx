@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { calculateUsageCost, calculateBaseline, detectACEvents, useBillingProjection, ActiveTab, ElectricityDataPoint } from '@electricity-tracker/shared';
+import { calculateUsageCost, calculateBaseline, detectACEvents, classifyHVACEvent, useBillingProjection, useWeatherData, downsampleWeatherTo15Minutes, ActiveTab, ElectricityDataPoint, HVACEventType } from '@electricity-tracker/shared';
 
 interface HomeTabProps {
   electricityData: ElectricityDataPoint[];
@@ -11,10 +11,12 @@ interface HomeTabProps {
 export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps) {
   const [displayUnit, setDisplayUnit] = useState<'$' | 'kWh'>('$');
   const [yesterdayUsage, setYesterdayUsage] = useState<number>(0);
-  const [acCostKwh, setAcCostKwh] = useState<number>(0);
+  const [hvacCostKwh, setHvacCostKwh] = useState<number>(0);
+  const [dominantType, setDominantType] = useState<HVACEventType>('unknown');
 
   // Use the shared billing projection context
   const { projection } = useBillingProjection();
+  const { data: weatherData } = useWeatherData();
 
   useEffect(() => {
     if (!electricityData || electricityData.length === 0) return;
@@ -35,7 +37,7 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
     const totalYesterdayKwh = yesterdayData.reduce((sum, item) => sum + (item.consumption_kwh || 0), 0);
     setYesterdayUsage(totalYesterdayKwh);
 
-    // Calculate AC cost for yesterday - exact same logic as LoadDisaggregation
+    // Calculate HVAC cost for yesterday - exact same logic as LoadDisaggregation
     const recentData = electricityData
       .filter(d => {
         if (d.consumption_kwh === null) return false;
@@ -67,22 +69,59 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
 
       // Calculate baseline usage with extended data
       const baseline = calculateBaseline(recentData, extendedData);
-      
-      // Detect AC usage
-      const acEvents = detectACEvents(recentData, baseline);
-      
-      // Convert events to kWh - exact same calculation as LoadDisaggregation
-      const totalAcKwh = acEvents.reduce((sum, event) => {
-        const duration = event.endIndex - event.startIndex + 1;
-        const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000; // 15-minute intervals
-        return sum + estimatedKwh;
-      }, 0);
 
-      setAcCostKwh(totalAcKwh);
+      // Detect HVAC usage
+      const hvacEvents = detectACEvents(recentData, baseline);
+
+      // Build weather lookup for type classification
+      const weatherMap = new Map<number, number>();
+      if (weatherData?.data) {
+        const downsampledWeather = downsampleWeatherTo15Minutes(weatherData.data);
+        downsampledWeather.forEach(w => {
+          const timeMs = new Date(w.timestamp).getTime();
+          weatherMap.set(timeMs, w.temperature_f);
+        });
+      }
+
+      // Convert events to kWh and track types
+      let heatingKwh = 0;
+      let coolingKwh = 0;
+      let unknownKwh = 0;
+
+      hvacEvents.forEach(event => {
+        const duration = event.endIndex - event.startIndex + 1;
+        const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000;
+
+        // Get temperature for this event to classify it
+        const eventTimeMs = new Date(recentData[event.startIndex].timestamp).getTime();
+        const temperature = weatherMap.get(eventTimeMs);
+        const type = classifyHVACEvent(temperature);
+
+        if (type === 'heating') {
+          heatingKwh += estimatedKwh;
+        } else if (type === 'cooling') {
+          coolingKwh += estimatedKwh;
+        } else {
+          unknownKwh += estimatedKwh;
+        }
+      });
+
+      const totalHvacKwh = heatingKwh + coolingKwh + unknownKwh;
+      setHvacCostKwh(totalHvacKwh);
+
+      // Determine dominant type - only show specific type if ALL events are that type
+      if (heatingKwh > 0 && coolingKwh === 0 && unknownKwh === 0) {
+        setDominantType('heating');
+      } else if (coolingKwh > 0 && heatingKwh === 0 && unknownKwh === 0) {
+        setDominantType('cooling');
+      } else {
+        setDominantType('unknown');
+      }
     } else {
-      setAcCostKwh(0);
+      setHvacCostKwh(0);
+      setDominantType('unknown');
     }
-  }, [electricityData]);
+  }, [electricityData, weatherData]);
 
   const formatValue = (kwh: number, forceUnit?: '$' | 'kWh') => {
     const unit = forceUnit || displayUnit;
@@ -128,17 +167,17 @@ export default function HomeTab({ electricityData, setActiveTab }: HomeTabProps)
           </div>
         </button>
 
-        <button onClick={() => setActiveTab('disaggregation')} 
+        <button onClick={() => setActiveTab('disaggregation')}
             className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-2xl p-6 text-center">
           <div className="text-sm font-medium text-orange-600 dark:text-orange-400 mb-2">
-            AC {displayUnit === '$' ? 'Cost' : 'Usage'} Yesterday
+            {dominantType === 'heating' ? 'Heating' : dominantType === 'cooling' ? 'Cooling' : 'Heating / Cooling'} {displayUnit === '$' ? 'Cost' : 'Usage'} Yesterday
           </div>
           <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
-            {formatValue(acCostKwh)}
+            {formatValue(hvacCostKwh)}
           </div>
           {yesterdayUsage > 0 && (
             <div className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-              ({((acCostKwh / yesterdayUsage) * 100).toFixed(1)}% of total)
+              ({((hvacCostKwh / yesterdayUsage) * 100).toFixed(1)}% of total)
             </div>
           )}
         </button>

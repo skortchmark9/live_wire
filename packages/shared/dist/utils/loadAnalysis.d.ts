@@ -1,4 +1,12 @@
-import { ElectricityDataPoint } from '../types';
+import { ElectricityDataPoint, HVACEventType } from '../types';
+/**
+ * Classify an HVAC event as heating, cooling, or unknown based on temperature
+ */
+export declare function classifyHVACEvent(temperature: number | undefined): HVACEventType;
+/**
+ * Calculate confidence for an HVAC event based on temperature and power usage
+ */
+export declare function calculateHVACConfidence(type: HVACEventType, temperature: number | undefined, avgExcessWatts: number): number;
 export interface DataPoint {
     timestamp: string;
     watts: number;

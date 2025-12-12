@@ -1,5 +1,53 @@
-import { ElectricityDataPoint } from '../types';
+import { ElectricityDataPoint, HVACEventType } from '../types';
 import { calculateUsageCost } from './costCalculations';
+
+// Temperature thresholds for HVAC classification
+const HEATING_THRESHOLD = 60; // Below this = heating
+const COOLING_THRESHOLD = 70; // Above this = cooling
+
+/**
+ * Classify an HVAC event as heating, cooling, or unknown based on temperature
+ */
+export function classifyHVACEvent(temperature: number | undefined): HVACEventType {
+  if (temperature === undefined) return 'unknown';
+  if (temperature < HEATING_THRESHOLD) return 'heating';
+  if (temperature > COOLING_THRESHOLD) return 'cooling';
+  return 'unknown';
+}
+
+/**
+ * Calculate confidence for an HVAC event based on temperature and power usage
+ */
+export function calculateHVACConfidence(
+  type: HVACEventType,
+  temperature: number | undefined,
+  avgExcessWatts: number
+): number {
+  let confidence = 0.6; // Base confidence
+
+  if (type === 'cooling' && temperature !== undefined) {
+    if (temperature > 75) {
+      confidence += 0.2;
+      if (temperature > 85) confidence += 0.1;
+    }
+    if (avgExcessWatts > 500) confidence += 0.1;
+    if (avgExcessWatts > 1000) confidence += 0.1;
+  } else if (type === 'heating' && temperature !== undefined) {
+    if (temperature < 50) {
+      confidence += 0.2;
+      if (temperature < 40) confidence += 0.1;
+    } else if (temperature < 60) {
+      confidence += 0.15;
+    }
+    if (avgExcessWatts > 500) confidence += 0.1;
+    if (avgExcessWatts > 1500) confidence += 0.1;
+  } else if (type === 'unknown') {
+    confidence = 0.5;
+    if (avgExcessWatts > 300) confidence += 0.1;
+  }
+
+  return Math.min(confidence, 0.95);
+}
 
 export interface DataPoint {
   timestamp: string;

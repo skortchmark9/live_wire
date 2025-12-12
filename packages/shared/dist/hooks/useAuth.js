@@ -146,18 +146,30 @@ function useAuth(options) {
         // Clear SWR cache for this session
         mutate(undefined, false);
     }, [mutate]);
-    const logout = (0, react_1.useCallback)(() => {
-        // Clear the cookie
+    const logout = (0, react_1.useCallback)(async () => {
+        // Clear the cookie - try multiple domain variations to ensure it's cleared
         if (typeof document !== 'undefined') {
+            // Clear for current domain
             document.cookie = 'user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            // Clear for parent domain (e.g., .tracy.ac)
+            const hostname = window.location.hostname;
+            if (hostname.includes('.')) {
+                const parentDomain = hostname.substring(hostname.indexOf('.'));
+                document.cookie = `user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${parentDomain};`;
+            }
+            // Clear with explicit domain
+            document.cookie = `user_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${hostname};`;
         }
-        // Reset all state to initial values
-        setSessionId('no-session'); // Set to sentinel value to trigger proper state
+        // Reset all state
+        setSessionId(null);
         setAuthError(null);
         setIsLoggingIn(false);
         setIsMFASubmitting(false);
-        // Clear SWR cache
-        mutate(undefined, false);
+        setInitialized(false); // Reset initialized to trigger re-check on next mount
+        // Clear SWR cache and wait for it to complete
+        await mutate(undefined, false);
+        // Small delay to ensure state is fully reset before navigation
+        await new Promise(resolve => setTimeout(resolve, 100));
         // Navigate to login if callback provided
         if (onNavigate) {
             onNavigate('/login');

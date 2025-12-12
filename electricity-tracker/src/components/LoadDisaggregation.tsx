@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Bar, ReferenceLine } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { useWeatherData, downsampleWeatherTo15Minutes, calculateUsageCost, calculateBaseline, detectACEvents, ElectricityDataPoint } from '@electricity-tracker/shared'
+import { useWeatherData, downsampleWeatherTo15Minutes, calculateUsageCost, calculateBaseline, detectACEvents, classifyHVACEvent, calculateHVACConfidence, ElectricityDataPoint, HVACEventType } from '@electricity-tracker/shared'
 
 interface WeatherDataPoint {
   timestamp: string
@@ -11,7 +11,7 @@ interface WeatherDataPoint {
   humidity_percent: number
 }
 
-interface ACUsage {
+interface HVACUsage {
   startTime: string
   endTime: string
   peakWatts: number
@@ -19,6 +19,7 @@ interface ACUsage {
   estimatedCost: number
   avgTemperature?: number
   confidence: number
+  type: HVACEventType
 }
 
 interface LoadDisaggregationProps {
@@ -27,7 +28,7 @@ interface LoadDisaggregationProps {
 }
 
 export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
-  const [detectedAC, setDetectedAC] = useState<ACUsage[]>([])
+  const [detectedHVAC, setDetectedHVAC] = useState<HVACUsage[]>([])
   const [selectedTimeRange, setSelectedTimeRange] = useState<'yesterday' | '24h' | '7d' | '30d' | '1y'>('yesterday')
   const [baselineWatts, setBaselineWatts] = useState<number>(0)
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
@@ -99,27 +100,24 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     const baseline = calculateBaseline(recentData, extendedData)
     setBaselineWatts(baseline)
 
-    // Detect AC usage
-    const acEvents = detectACEvents(recentData, baseline)
-    
-    // Convert events to ACUsage format with weather data
-    const acUsageList: ACUsage[] = acEvents.map(event => {
+    // Detect HVAC usage events
+    const hvacEvents = detectACEvents(recentData, baseline)
+
+    // Convert events to HVACUsage format with weather data and type classification
+    const hvacUsageList: HVACUsage[] = hvacEvents.map(event => {
       const duration = event.endIndex - event.startIndex + 1
       const estimatedKwh = (event.avgExcessWatts * duration * 0.25) / 1000 // 15-minute intervals
-      
+
       // Get temperature for this event
       const eventTimeMs = new Date(recentData[event.startIndex].timestamp).getTime()
       const temperature = weatherMap.get(eventTimeMs) || undefined
-      
-      // Calculate confidence
-      let confidence = 0.6
-      if (temperature && temperature > 75) {
-        confidence += 0.2
-        if (temperature > 85) confidence += 0.1
-      }
-      if (event.avgExcessWatts > 500) confidence += 0.1
-      if (event.avgExcessWatts > 1000) confidence += 0.1
-      
+
+      // Classify as heating, cooling, or unknown based on temperature
+      const type = classifyHVACEvent(temperature)
+
+      // Calculate confidence based on type and temperature
+      const confidence = calculateHVACConfidence(type, temperature, event.avgExcessWatts)
+
       return {
         startTime: recentData[event.startIndex].timestamp,
         endTime: recentData[event.endIndex].timestamp,
@@ -127,11 +125,12 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         estimatedKwh,
         estimatedCost: calculateUsageCost(estimatedKwh),
         avgTemperature: temperature,
-        confidence: Math.min(confidence, 0.95)
+        confidence,
+        type
       }
     })
-    
-    setDetectedAC(acUsageList)
+
+    setDetectedHVAC(hvacUsageList)
   }, [selectedTimeRange])
 
   useEffect(() => {
@@ -189,27 +188,36 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     }
 
 
-    // Create a set of AC usage timestamps for faster lookup
-    const acTimestamps = new Set<number>()
-    detectedAC.forEach(ac => {
-      const start = new Date(ac.startTime).getTime()
-      const end = new Date(ac.endTime).getTime()
-      
+    // Create maps for heating and cooling timestamps
+    const heatingTimestamps = new Set<number>()
+    const coolingTimestamps = new Set<number>()
+    detectedHVAC.forEach(event => {
+      const start = new Date(event.startTime).getTime()
+      const end = new Date(event.endTime).getTime()
+
       recentData.forEach(dataPoint => {
         const pointTime = new Date(dataPoint.timestamp).getTime()
         if (pointTime >= start && pointTime <= end) {
-          acTimestamps.add(pointTime)
+          if (event.type === 'heating') {
+            heatingTimestamps.add(pointTime)
+          } else if (event.type === 'cooling') {
+            coolingTimestamps.add(pointTime)
+          } else {
+            // Unknown - show as cooling (red) by default
+            coolingTimestamps.add(pointTime)
+          }
         }
       })
     })
 
-    // Combine actual data with AC detections and weather
+    // Combine actual data with HVAC detections and weather
     const chartData = recentData.map(d => {
       const pointTime = new Date(d.timestamp).getTime()
       return {
         ...d,
         temperature: weatherLookup.get(pointTime) || undefined,
-        AC: acTimestamps.has(pointTime) ? 1 : null // Binary indicator - only show when AC is active
+        heating: heatingTimestamps.has(pointTime) ? 1 : null,
+        cooling: coolingTimestamps.has(pointTime) ? 1 : null
       }
     })
     
@@ -221,14 +229,20 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     // }
     
     return chartData
-  }, [selectedTimeRange, electricityData, weatherData, detectedAC])
+  }, [selectedTimeRange, electricityData, weatherData, detectedHVAC])
 
   if (loading || weatherLoading) {
     return <div className="flex items-center justify-center h-64 dark:text-white">Loading usage analysis...</div>
   }
 
-  const totalDetectedKwh = detectedAC.reduce((sum, ac) => sum + ac.estimatedKwh, 0)
-  const totalDetectedCost = detectedAC.reduce((sum, ac) => sum + ac.estimatedCost, 0)
+  const totalDetectedKwh = detectedHVAC.reduce((sum, event) => sum + event.estimatedKwh, 0)
+  const totalDetectedCost = detectedHVAC.reduce((sum, event) => sum + event.estimatedCost, 0)
+
+  // Calculate kWh by type to determine dominant type for label
+  const heatingKwh = detectedHVAC.filter(e => e.type === 'heating').reduce((sum, e) => sum + e.estimatedKwh, 0)
+  const coolingKwh = detectedHVAC.filter(e => e.type === 'cooling').reduce((sum, e) => sum + e.estimatedKwh, 0)
+  const dominantType = heatingKwh > 0 && coolingKwh === 0 ? 'Heating' :
+                       coolingKwh > 0 && heatingKwh === 0 ? 'Cooling' : 'Heating / Cooling'
 
   // Calculate total usage for the selected period
   const now = new Date()
@@ -281,7 +295,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
   return (
     <div className="space-y-4 lg:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-        <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">AC Usage Analysis</h2>
+        <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">{dominantType} Usage Analysis</h2>
         <div className="flex gap-1 sm:gap-2 sm:ml-auto">
           {(['yesterday', '24h', '7d', '30d', '1y'] as const).map(range => (
             <button
@@ -299,7 +313,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
 
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
         <div className="hidden sm:block text-center p-2 sm:p-3 bg-red-50 dark:bg-red-900/20 rounded">
-          <div className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400">{detectedAC.length}</div>
+          <div className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400">{detectedHVAC.length}</div>
           <div className="text-xs text-gray-600 dark:text-gray-300">Events</div>
         </div>
         <div className="text-center p-2 sm:p-3 bg-green-50 dark:bg-green-900/20 rounded">
@@ -308,7 +322,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         </div>
         <div className="text-center p-2 sm:p-3 bg-purple-50 dark:bg-purple-900/20 rounded">
           <div className="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400">${totalDetectedCost.toFixed(2)}</div>
-          <div className="text-xs text-gray-600 dark:text-gray-300">AC Cost</div>
+          <div className="text-xs text-gray-600 dark:text-gray-300">{dominantType} Cost</div>
         </div>
         <div className="text-center p-2 sm:p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
           <div className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{acPercentage.toFixed(1)}%</div>
@@ -368,16 +382,28 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
               name="Power Usage"
             />
             
-            {/* AC usage indicator */}
+            {/* Cooling usage indicator (blue) */}
             <Line
               yAxisId="indicator"
               type="stepAfter"
-              dataKey="AC"
+              dataKey="cooling"
+              stroke="#3b82f6"
+              strokeWidth={8}
+              dot={false}
+              connectNulls={false}
+              name="Cooling"
+            />
+
+            {/* Heating usage indicator (red) */}
+            <Line
+              yAxisId="indicator"
+              type="stepAfter"
+              dataKey="heating"
               stroke="#ef4444"
               strokeWidth={8}
               dot={false}
               connectNulls={false}
-              name="AC Usage"
+              name="Heating"
             />
             
             {/* Baseline reference line */}
@@ -393,12 +419,13 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       </div>
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow dark:shadow-gray-700">
-        <h3 className="text-lg font-semibold mb-4 dark:text-white">AC Usage Events</h3>
+        <h3 className="text-lg font-semibold mb-4 dark:text-white">HVAC Usage Events</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700">
                 <th className="text-left p-2 dark:text-white">Start Time</th>
+                <th className="text-left p-2 dark:text-white">Type</th>
                 <th className="text-left p-2 dark:text-white">Duration</th>
                 <th className="text-left p-2 dark:text-white">Peak Watts</th>
                 <th className="text-left p-2 dark:text-white">Energy (kWh)</th>
@@ -408,26 +435,35 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
               </tr>
             </thead>
             <tbody>
-              {detectedAC.slice(-20).map((ac, index) => {
-                const start = new Date(ac.startTime)
-                const end = new Date(ac.endTime)
+              {detectedHVAC.slice(-20).map((event, index) => {
+                const start = new Date(event.startTime)
+                const end = new Date(event.endTime)
                 const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
-                
+
                 return (
                   <tr key={index} className="border-b dark:border-gray-600">
                     <td className="p-2 dark:text-white">{format(start, 'MMM dd, HH:mm')}</td>
+                    <td className="p-2">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        event.type === 'cooling' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200' :
+                        event.type === 'heating' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                      }`}>
+                        {event.type === 'cooling' ? 'Cooling' : event.type === 'heating' ? 'Heating' : 'Unknown'}
+                      </span>
+                    </td>
                     <td className="p-2 dark:text-white">{durationHours.toFixed(1)}h</td>
-                    <td className="p-2 dark:text-white">{ac.peakWatts.toFixed(0)}W</td>
-                    <td className="p-2 dark:text-white">{ac.estimatedKwh.toFixed(4)}</td>
-                    <td className="p-2 font-medium text-purple-600 dark:text-purple-400">${ac.estimatedCost.toFixed(4)}</td>
-                    <td className="p-2 dark:text-white">{ac.avgTemperature ? `${ac.avgTemperature.toFixed(0)}°F` : '-'}</td>
+                    <td className="p-2 dark:text-white">{event.peakWatts.toFixed(0)}W</td>
+                    <td className="p-2 dark:text-white">{event.estimatedKwh.toFixed(4)}</td>
+                    <td className="p-2 font-medium text-purple-600 dark:text-purple-400">${event.estimatedCost.toFixed(4)}</td>
+                    <td className="p-2 dark:text-white">{event.avgTemperature ? `${event.avgTemperature.toFixed(0)}°F` : '-'}</td>
                     <td className="p-2">
                       <span className={`px-2 py-1 rounded text-xs ${
-                        ac.confidence > 0.7 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
-                        ac.confidence > 0.5 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200' :
+                        event.confidence > 0.7 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
+                        event.confidence > 0.5 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200' :
                         'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
                       }`}>
-                        {(ac.confidence * 100).toFixed(0)}%
+                        {(event.confidence * 100).toFixed(0)}%
                       </span>
                     </td>
                   </tr>
@@ -438,17 +474,17 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         </div>
       </div>
 
-      <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-        <h4 className="font-semibold mb-2 dark:text-white">AC Detection Logic</h4>
+      <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+        <h4 className="font-semibold mb-2 dark:text-white">HVAC Detection Logic</h4>
         <div className="text-sm text-gray-600 dark:text-gray-300">
           <p className="mb-2">
-            <span className="font-medium">AC Detection:</span> Identifies power spikes 200W+ above baseline usage
+            <span className="font-medium">Detection:</span> Identifies power spikes 200W+ above baseline usage
           </p>
           <p className="mb-2">
-            <span className="font-medium">Temperature Correlation:</span> Higher confidence when temperature exceeds 75°F
+            <span className="font-medium">Classification:</span> <span className="text-blue-600 dark:text-blue-400">Cooling</span> when temp &gt; 70°F, <span className="text-red-600 dark:text-red-400">Heating</span> when temp &lt; 60°F
           </p>
           <p>
-            <span className="font-medium">Baseline:</span> Calculated as 18th percentile of usage over selected time period
+            <span className="font-medium">Baseline:</span> Calculated from minimum usage patterns over time
           </p>
         </div>
       </div>

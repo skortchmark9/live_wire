@@ -59,3 +59,16 @@ export interface CostBreakdown {
 
 export type TimeRange = '7d' | '30d' | '1d'
 export type ActiveTab = 'home' | 'disaggregation' | 'cost'
+
+export type HVACEventType = 'heating' | 'cooling' | 'unknown'
+
+export interface HVACUsageEvent {
+  startTime: string
+  endTime: string
+  peakWatts: number
+  estimatedKwh: number
+  estimatedCost: number
+  avgTemperature?: number
+  confidence: number
+  type: HVACEventType
+}
