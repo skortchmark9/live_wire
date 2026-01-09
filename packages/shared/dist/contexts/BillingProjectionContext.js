@@ -40,13 +40,27 @@ const react_1 = __importStar(require("react"));
 const date_fns_1 = require("date-fns");
 const billingProjections_1 = require("../utils/billingProjections");
 const BillingProjectionContext = (0, react_1.createContext)(undefined);
-function BillingProjectionProvider({ children, combinedData, conedForecast, weatherData }) {
-    // Initialize selectedModelDay to yesterday - this state is truly shared
+function BillingProjectionProvider({ children, combinedData, conedForecast, weatherData, initialDate, onDateChange }) {
+    // Initialize selectedModelDay from URL param or default to yesterday
     const [selectedModelDay, setSelectedModelDay] = (0, react_1.useState)(() => {
+        if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+            return initialDate;
+        }
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         return (0, date_fns_1.format)(yesterday, 'yyyy-MM-dd');
     });
+    // Sync selected date when URL param changes (e.g., browser back/forward)
+    (0, react_1.useEffect)(() => {
+        if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) && initialDate !== selectedModelDay) {
+            setSelectedModelDay(initialDate);
+        }
+    }, [initialDate]);
+    // Sync URL when date changes
+    const handleSetSelectedModelDay = (day) => {
+        setSelectedModelDay(day);
+        onDateChange?.(day);
+    };
     // Memoize daily data buckets to avoid repeated filtering
     const dailyDataBuckets = (0, react_1.useMemo)(() => {
         return (0, billingProjections_1.createDailyDataBuckets)(combinedData);
@@ -87,7 +101,7 @@ function BillingProjectionProvider({ children, combinedData, conedForecast, weat
     }, [lastMonthData, selectedModelDay]);
     const value = {
         selectedModelDay,
-        setSelectedModelDay,
+        setSelectedModelDay: handleSetSelectedModelDay,
         projection,
         billingPeriodData,
         lastMonthData,

@@ -333,5 +333,9 @@ app.include_router(payment_router)
 from documents.document_api import router as document_router
 app.include_router(document_router)
 
+# Include upload API router
+import upload_api
+app.include_router(upload_api.router)
+
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=5050, reload=True)

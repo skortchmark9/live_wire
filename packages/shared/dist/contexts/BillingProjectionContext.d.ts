@@ -15,8 +15,10 @@ interface BillingProjectionProviderProps {
     combinedData: CombinedDataPoint[];
     conedForecast: ConEdForecast | null;
     weatherData: OpenWeatherDataPoint[];
+    initialDate?: string;
+    onDateChange?: (date: string) => void;
 }
-export declare function BillingProjectionProvider({ children, combinedData, conedForecast, weatherData }: BillingProjectionProviderProps): React.JSX.Element;
+export declare function BillingProjectionProvider({ children, combinedData, conedForecast, weatherData, initialDate, onDateChange }: BillingProjectionProviderProps): React.JSX.Element;
 export declare function useBillingProjection(): BillingProjectionContextType;
 export {};
 //# sourceMappingURL=BillingProjectionContext.d.ts.map
