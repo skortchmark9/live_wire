@@ -198,31 +198,36 @@ def merge_weather_data(historical_data: List[Dict], current_forecast_data: List[
     return all_data
 
 
+def load_baked_historical_weather() -> List[Dict]:
+    """Load baked-in historical weather data from file."""
+    historical_file = Path(__file__).parent.parent / "data" / "historical_weather.json"
+    if historical_file.exists():
+        with open(historical_file, 'r') as f:
+            data = json.load(f)
+            log.info(f"Loaded {len(data)} baked-in historical weather points")
+            return data
+    log.warning(f"Historical weather file not found: {historical_file}")
+    return []
+
+
 def collect_weather_data_full() -> Dict:
     """
     Full weather data collection including historical and current/forecast data.
-    
+
     Returns:
         Dictionary with weather data and metadata
     """
-    # Date range for recent data (last 30 days to current + forecast)
-    start_date = (datetime.now() - timedelta(days=30)).date()
-    historical_end_date = date.today() - timedelta(days=8)  # Stop 8 days ago for archive API
-    
     log.info(f"Collecting weather data for NYC:")
-    log.info(f"  Recent historical: {start_date} to {historical_end_date}")
+    log.info(f"  Historical: loading from baked-in file")
     log.info(f"  Current + Forecast: last 7 days + next 7 days")
-    
-    # Get recent historical weather data
-    historical_data = []
-    if historical_end_date >= start_date:
-        historical_data = get_historical_weather(start_date, historical_end_date)
-        log.info(f"Collected {len(historical_data)} historical weather points")
-    
+
+    # Load baked-in historical data (doesn't change, no need to re-fetch)
+    historical_data = load_baked_historical_weather()
+
     # Get current and forecast weather data (last 7 days + next 7 days)
     current_forecast_data = get_current_and_forecast_weather()
     log.info(f"Collected {len(current_forecast_data)} current/forecast weather points")
-    
+
     # Merge the data
     all_weather_data = merge_weather_data(historical_data, current_forecast_data)
     

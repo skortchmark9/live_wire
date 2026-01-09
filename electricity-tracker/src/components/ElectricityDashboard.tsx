@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { parseISO } from 'date-fns'
 import LoadDisaggregation from './LoadDisaggregation'
 import CostInsightsTab from './CostInsightsTab'
@@ -18,20 +19,57 @@ import {
 } from '@electricity-tracker/shared'
 
 export default function ElectricityDashboard() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  // Read URL query params
+  const urlDate = searchParams.get('date')
+  const urlTab = searchParams.get('tab') as ActiveTab | null
+
+  // Callback to sync URL when date changes
+  const handleDateChange = useCallback((date: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (date) {
+      params.set('date', date)
+    } else {
+      params.delete('date')
+    }
+    const queryString = params.toString()
+    router.replace(queryString ? `?${queryString}` : '/', { scroll: false })
+  }, [searchParams, router])
+
+  // Callback to sync URL when tab changes
+  const handleTabChange = useCallback((tab: ActiveTab) => {
+    setActiveTab(tab)
+    const params = new URLSearchParams(searchParams.toString())
+    if (tab === 'home') {
+      params.delete('tab')
+    } else {
+      params.set('tab', tab)
+    }
+    const queryString = params.toString()
+    router.replace(queryString ? `?${queryString}` : '/', { scroll: false })
+  }, [searchParams, router])
+
   // Use SWR hooks for all data fetching
   const { data: electricityApiData, isLoading: electricityLoading, error: electricityError } = useElectricityData()
   const { data: weatherApiData, isLoading: weatherLoading, error: weatherError } = useWeatherData()
-  
+
   const [electricityData, setElectricityData] = useState<ElectricityDataPoint[]>([])
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
   const [combinedData, setCombinedData] = useState<CombinedDataPoint[]>([])
   // const [predictions, setPredictions] = useState<PredictionDataPoint[]>([]) // unused state
   const [conedForecast, setConedForecast] = useState<ConEdForecast | null>(null)
-  
+
   // Compute overall loading and error states
   const loading = electricityLoading || weatherLoading
   const error = electricityError || weatherError
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home')
+  // Initialize tab from URL: explicit tab param > date implies disaggregation > default home
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (urlTab && ['home', 'disaggregation', 'cost'].includes(urlTab)) return urlTab
+    if (urlDate) return 'disaggregation'
+    return 'home'
+  })
 
   // Process electricity data
   useEffect(() => {
@@ -123,7 +161,7 @@ export default function ElectricityDashboard() {
 
   return (
     <div className="space-y-6">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Header activeTab={activeTab} setActiveTab={handleTabChange} />
 
       <BillingProjectionProvider
         combinedData={combinedData}
@@ -134,11 +172,18 @@ export default function ElectricityDashboard() {
           relative_humidity_2m: item.humidity_percent || 0,
           weather_code: 0
         }))}
+        initialDate={urlDate || undefined}
+        onDateChange={handleDateChange}
       >
         {activeTab === 'home' ? (
-          <HomeTab electricityData={electricityData} setActiveTab={setActiveTab} />
+          <HomeTab electricityData={electricityData} setActiveTab={handleTabChange} />
         ) : activeTab === 'disaggregation' ? (
-          <LoadDisaggregation electricityData={electricityData} loading={loading} />
+          <LoadDisaggregation
+            electricityData={electricityData}
+            loading={loading}
+            selectedDate={urlDate || undefined}
+            onDateChange={handleDateChange}
+          />
         ) : activeTab === 'cost' ? (
           <CostInsightsTab />
         ) : null}

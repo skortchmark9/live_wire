@@ -14,9 +14,80 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import List, Dict, Optional
 import pytz
+import pandas as pd
 
 # Add opower to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "opower" / "src"))
+
+# Path to demo CSV fallback data
+DEMO_CSV_PATH = Path(__file__).parent.parent / "data" / "demo_usage_data.csv"
+
+
+def load_demo_csv_data() -> List[Dict]:
+    """Load demo usage data from CSV file as fallback when API fails."""
+    if not DEMO_CSV_PATH.exists():
+        print(f"Demo CSV not found at {DEMO_CSV_PATH}")
+        return []
+
+    print(f"Loading demo data from CSV: {DEMO_CSV_PATH}")
+
+    # Read CSV, skipping header rows until we find the data table
+    with open(DEMO_CSV_PATH, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # Find the row that starts with "TYPE" (the actual header)
+    data_start_row = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith('TYPE'):
+            data_start_row = i
+            break
+
+    if data_start_row is None:
+        print("Could not find data table header in CSV")
+        return []
+
+    # Parse CSV from the data table
+    from io import StringIO
+    csv_data = ''.join(lines[data_start_row:])
+    df = pd.read_csv(StringIO(csv_data))
+
+    # Convert to expected format
+    usage_data = []
+    for _, row in df.iterrows():
+        try:
+            # Parse date and times
+            date_str = row['DATE']
+            start_time_str = row['START TIME']
+            end_time_str = row['END TIME']
+
+            # Handle end time rollover (e.g., 23:45 -> 00:00 means next day)
+            start_dt = datetime.strptime(f"{date_str} {start_time_str}", "%Y-%m-%d %H:%M")
+
+            # End time might be like "00:14" which means same day, or "00:00" after "23:45"
+            end_hour, end_min = map(int, end_time_str.split(':'))
+            start_hour = start_dt.hour
+
+            if end_hour == 0 and start_hour == 23:
+                # Rolled over to next day
+                end_dt = start_dt.replace(hour=0, minute=end_min) + timedelta(days=1)
+            else:
+                end_dt = start_dt.replace(hour=end_hour, minute=end_min)
+                # Add 1 to minute since CSV shows "00:14" meaning end of interval
+                end_dt = end_dt + timedelta(minutes=1)
+
+            data_point = {
+                "start_time": start_dt.isoformat(),
+                "end_time": end_dt.isoformat(),
+                "consumption_kwh": float(row['USAGE (kWh)']),
+                "provided_cost": None
+            }
+            usage_data.append(data_point)
+        except Exception as e:
+            print(f"Error parsing row: {e}")
+            continue
+
+    print(f"Loaded {len(usage_data)} records from demo CSV")
+    return usage_data
 
 from opower import Opower, AggregateType, ReadResolution
 

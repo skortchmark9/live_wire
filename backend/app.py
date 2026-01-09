@@ -15,7 +15,7 @@ from pydantic import BaseModel
 import uvicorn
 from opower import exceptions as opower_exceptions
 from opower import Opower
-from data_collectors.electricity_collector import collect_electricity_data, get_user_api
+from data_collectors.electricity_collector import collect_electricity_data, get_user_api, load_demo_csv_data
 from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -63,18 +63,36 @@ limiter = Limiter(key_func=get_remote_address)
 # Thread-safe TTL cache for demo data (15 minute TTL, max 10 item)
 data_cache = TTLCache(maxsize=10, ttl=900)  # 15 minutes = 900 seconds
 
-async def cached_collect_electricity_data(api, cache_key):
+async def cached_collect_electricity_data(api, cache_key, is_demo=False):
     if cache_key in data_cache:
         logger.info("Returning cached demo data")
         return data_cache[cache_key]
-    
+
     logger.info("Cache miss - fetching fresh data from ConEd")
     result = await collect_electricity_data(api)
+
+    # For demo users, fall back to CSV if API returns empty data
+    usage_data = result.get('usage_data', []) if result else []
+    if is_demo and len(usage_data) == 0:
+        logger.info("API returned no data for demo - falling back to CSV")
+        csv_data = load_demo_csv_data()
+        if csv_data:
+            result = {
+                "status": "success",
+                "usage_data": csv_data,
+                "forecast_data": result.get('forecast_data', []) if result else [],
+                "metadata": {
+                    "collection_date": datetime.now().isoformat(),
+                    "source": "csv_fallback",
+                    "total_records": len(csv_data)
+                }
+            }
+            logger.info(f"Loaded {len(csv_data)} records from CSV fallback")
 
     if result:
         data_cache[cache_key] = result
         logger.info("Data cached for 15 minutes")
-    
+
     return result
 
 async def periodic_weather_update():
@@ -286,7 +304,7 @@ async def get_electricity_data_combined(
     try:
         async with get_user_api(session['username'], session['password'], session['access_token']) as api:
             key = 'demo' if is_demo else session['access_token']
-            result = await cached_collect_electricity_data(api, key)
+            result = await cached_collect_electricity_data(api, key, is_demo=is_demo)
     except opower_exceptions.ApiException as e:
         raise HTTPException(status_code=e.status, detail=f"Failed to collect electricity data: {str(e)}")
     

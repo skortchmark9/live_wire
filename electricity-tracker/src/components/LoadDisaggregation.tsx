@@ -22,29 +22,49 @@ interface HVACUsage {
   type: HVACEventType
 }
 
+type TimeRange = 'yesterday' | '24h' | '7d' | '30d' | '1y' | 'custom'
+
 interface LoadDisaggregationProps {
   electricityData: ElectricityDataPoint[]
   loading?: boolean
+  selectedDate?: string // yyyy-MM-dd format for deep linking
+  onDateChange?: (date: string) => void
 }
 
-export default function LoadDisaggregation({ electricityData, loading = false }: LoadDisaggregationProps) {
+export default function LoadDisaggregation({ electricityData, loading = false, selectedDate, onDateChange }: LoadDisaggregationProps) {
   const [detectedHVAC, setDetectedHVAC] = useState<HVACUsage[]>([])
-  const [selectedTimeRange, setSelectedTimeRange] = useState<'yesterday' | '24h' | '7d' | '30d' | '1y'>('yesterday')
+  // If a specific date is provided, use 'custom' mode
+  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>(() => selectedDate ? 'custom' : 'yesterday')
+  const [customDate, setCustomDate] = useState<string | undefined>(selectedDate)
   const [baselineWatts, setBaselineWatts] = useState<number>(0)
   const { data: weatherData, isLoading: weatherLoading } = useWeatherData()
+
+  // Sync with URL date changes
+  useEffect(() => {
+    if (selectedDate && selectedDate !== customDate) {
+      setCustomDate(selectedDate)
+      setSelectedTimeRange('custom')
+    }
+  }, [selectedDate])
 
   const analyzeACUsage = useCallback((data: ElectricityDataPoint[], weather: WeatherDataPoint[]) => {
     const now = new Date()
     let cutoff: Date
     let endTime: Date = now
-    
-    if (selectedTimeRange === 'yesterday') {
+
+    if (selectedTimeRange === 'custom' && customDate) {
+      // Use specific date from URL
+      cutoff = parseISO(customDate)
+      cutoff.setHours(0, 0, 0, 0)
+      endTime = new Date(cutoff)
+      endTime.setDate(endTime.getDate() + 1)
+    } else if (selectedTimeRange === 'yesterday') {
       // Get yesterday's date range (midnight to midnight)
       const yesterday = new Date(now)
       yesterday.setDate(yesterday.getDate() - 1)
       yesterday.setHours(0, 0, 0, 0)
       cutoff = yesterday
-      
+
       endTime = new Date(yesterday)
       endTime.setDate(endTime.getDate() + 1)
     } else {
@@ -57,7 +77,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
       .filter(d => {
         if (d.consumption_kwh === null) return false
         const startTime = new Date(d.start_time)
-        if (selectedTimeRange === 'yesterday') {
+        if (selectedTimeRange === 'yesterday' || selectedTimeRange === 'custom') {
           return startTime >= cutoff && startTime < endTime
         }
         return startTime >= cutoff
@@ -131,7 +151,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     })
 
     setDetectedHVAC(hvacUsageList)
-  }, [selectedTimeRange])
+  }, [selectedTimeRange, customDate])
 
   useEffect(() => {
     if (electricityData.length > 0 && weatherData) {
@@ -144,27 +164,33 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     const now = new Date()
     let cutoff: Date
     let endTime: Date = now
-    
-    if (selectedTimeRange === 'yesterday') {
+
+    if (selectedTimeRange === 'custom' && customDate) {
+      // Use specific date from URL
+      cutoff = parseISO(customDate)
+      cutoff.setHours(0, 0, 0, 0)
+      endTime = new Date(cutoff)
+      endTime.setDate(endTime.getDate() + 1)
+    } else if (selectedTimeRange === 'yesterday') {
       // Get yesterday's date range (midnight to midnight)
       const yesterday = new Date(now)
       yesterday.setDate(yesterday.getDate() - 1)
       yesterday.setHours(0, 0, 0, 0)
       cutoff = yesterday
-      
+
       endTime = new Date(yesterday)
       endTime.setDate(endTime.getDate() + 1)
     } else {
       const cutoffHours = selectedTimeRange === '24h' ? 24 : selectedTimeRange === '7d' ? 168 : selectedTimeRange === '30d' ? 720 : 8760
       cutoff = new Date(now.getTime() - cutoffHours * 60 * 60 * 1000)
     }
-    
+
     // Get data for selected time range
     const recentData = electricityData
       .filter(d => {
         if (d.consumption_kwh === null) return false
         const startTime = new Date(d.start_time)
-        if (selectedTimeRange === 'yesterday') {
+        if (selectedTimeRange === 'yesterday' || selectedTimeRange === 'custom') {
           return startTime >= cutoff && startTime < endTime
         }
         return startTime >= cutoff
@@ -229,7 +255,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     // }
     
     return chartData
-  }, [selectedTimeRange, electricityData, weatherData, detectedHVAC])
+  }, [selectedTimeRange, customDate, electricityData, weatherData, detectedHVAC])
 
   if (loading || weatherLoading) {
     return <div className="flex items-center justify-center h-64 dark:text-white">Loading usage analysis...</div>
@@ -249,7 +275,12 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
   let cutoff: Date
   let endTime: Date = now
 
-  if (selectedTimeRange === 'yesterday') {
+  if (selectedTimeRange === 'custom' && customDate) {
+    cutoff = parseISO(customDate)
+    cutoff.setHours(0, 0, 0, 0)
+    endTime = new Date(cutoff)
+    endTime.setDate(endTime.getDate() + 1)
+  } else if (selectedTimeRange === 'yesterday') {
     // Get yesterday's date range (midnight to midnight)
     const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
@@ -268,7 +299,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     ? (() => {
         const filteredWeather = weatherData.data.filter(w => {
           const weatherTime = new Date(w.timestamp)
-          if (selectedTimeRange === 'yesterday') {
+          if (selectedTimeRange === 'yesterday' || selectedTimeRange === 'custom') {
             return weatherTime >= cutoff && weatherTime < endTime
           }
           return weatherTime >= cutoff
@@ -282,7 +313,7 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
     .filter(d => {
       if (d.consumption_kwh === null) return false
       const startTime = new Date(d.start_time)
-      if (selectedTimeRange === 'yesterday') {
+      if (selectedTimeRange === 'yesterday' || selectedTimeRange === 'custom') {
         return startTime >= cutoff && startTime < endTime
       }
       return startTime >= cutoff
@@ -292,16 +323,62 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
   const acPercentage = totalPeriodKwh > 0 ? (totalDetectedKwh / totalPeriodKwh) * 100 : 0
 
 
+  // Handle time range button click - clear custom date when switching to preset ranges
+  const handleTimeRangeClick = (range: TimeRange) => {
+    setSelectedTimeRange(range)
+    if (range !== 'custom') {
+      setCustomDate(undefined)
+      onDateChange?.('') // Clear URL date param
+    }
+  }
+
+  // Format the display date for custom mode
+  const displayDate = customDate ? format(parseISO(customDate), 'MMM d, yyyy') : ''
+
   return (
     <div className="space-y-4 lg:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-        <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">{dominantType} Usage Analysis</h2>
-        <div className="flex gap-1 sm:gap-2 sm:ml-auto">
+        <h2 className="hidden sm:block text-xl sm:text-2xl font-bold dark:text-white">
+          {dominantType} Usage Analysis
+          {selectedTimeRange === 'custom' && customDate && (
+            <span className="text-base font-normal text-gray-500 dark:text-gray-400 ml-2">
+              — {displayDate}
+            </span>
+          )}
+        </h2>
+        <div className="flex gap-1 sm:gap-2 sm:ml-auto items-center">
+          <button
+            type="button"
+            onClick={() => {
+              const input = document.getElementById('date-picker-input') as HTMLInputElement
+              input?.showPicker()
+            }}
+            className={`relative px-3 py-2 rounded text-sm cursor-pointer flex items-center gap-1.5 ${
+              selectedTimeRange === 'custom' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
+            }`}
+          >
+            <span>📅</span>
+            <span>{customDate ? format(parseISO(customDate), 'MMM d') : 'Pick'}</span>
+          </button>
+          <input
+            id="date-picker-input"
+            type="date"
+            value={customDate || ''}
+            onChange={(e) => {
+              const date = e.target.value
+              if (date) {
+                setCustomDate(date)
+                setSelectedTimeRange('custom')
+                onDateChange?.(date)
+              }
+            }}
+            className="sr-only"
+          />
           {(['yesterday', '24h', '7d', '30d', '1y'] as const).map(range => (
             <button
               key={range}
-              onClick={() => setSelectedTimeRange(range)}
-              className={`flex-1 px-3 sm:px-4 py-2 rounded text-sm sm:text-base ${
+              onClick={() => handleTimeRangeClick(range)}
+              className={`px-3 sm:px-4 py-2 rounded text-sm sm:text-base ${
                 selectedTimeRange === range ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 dark:text-white'
               }`}
             >
@@ -339,11 +416,11 @@ export default function LoadDisaggregation({ electricityData, loading = false }:
         <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={getChartData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
+            <XAxis
               dataKey="timestamp"
               tickFormatter={(value) => {
                 const date = parseISO(value)
-                if (selectedTimeRange === 'yesterday' || selectedTimeRange === '24h') return format(date, 'HH:mm')
+                if (selectedTimeRange === 'yesterday' || selectedTimeRange === '24h' || selectedTimeRange === 'custom') return format(date, 'HH:mm')
                 if (selectedTimeRange === '7d') return format(date, 'MMM dd')
                 if (selectedTimeRange === '1y') return format(date, 'MMM')
                 return format(date, 'MMM dd')

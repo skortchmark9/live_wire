@@ -31,21 +31,41 @@ interface BillingProjectionProviderProps {
   combinedData: CombinedDataPoint[];
   conedForecast: ConEdForecast | null;
   weatherData: OpenWeatherDataPoint[];
+  initialDate?: string; // URL deep link date in yyyy-MM-dd format
+  onDateChange?: (date: string) => void; // Callback to sync URL
 }
 
-export function BillingProjectionProvider({ 
-  children, 
-  combinedData, 
-  conedForecast, 
-  weatherData 
+export function BillingProjectionProvider({
+  children,
+  combinedData,
+  conedForecast,
+  weatherData,
+  initialDate,
+  onDateChange
 }: BillingProjectionProviderProps) {
-  
-  // Initialize selectedModelDay to yesterday - this state is truly shared
+
+  // Initialize selectedModelDay from URL param or default to yesterday
   const [selectedModelDay, setSelectedModelDay] = useState<string>(() => {
+    if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate)) {
+      return initialDate;
+    }
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     return format(yesterday, 'yyyy-MM-dd');
   });
+
+  // Sync selected date when URL param changes (e.g., browser back/forward)
+  useEffect(() => {
+    if (initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) && initialDate !== selectedModelDay) {
+      setSelectedModelDay(initialDate);
+    }
+  }, [initialDate]);
+
+  // Sync URL when date changes
+  const handleSetSelectedModelDay = (day: string) => {
+    setSelectedModelDay(day);
+    onDateChange?.(day);
+  };
 
   // Memoize daily data buckets to avoid repeated filtering
   const dailyDataBuckets = useMemo(() => {
@@ -99,7 +119,7 @@ export function BillingProjectionProvider({
 
   const value = {
     selectedModelDay,
-    setSelectedModelDay,
+    setSelectedModelDay: handleSetSelectedModelDay,
     projection,
     billingPeriodData,
     lastMonthData,
