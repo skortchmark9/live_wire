@@ -60,6 +60,32 @@ const SEASON_LABELS = {
   shoulder: 'Shoulder (Mar-May, Sep-Nov)',
 }
 
+type TempBand = 'cold' | 'cool' | 'mild' | 'warm' | 'hot'
+
+const TEMP_BAND_COLORS: { [key in TempBand]: string } = {
+  cold: '#3b82f6',   // blue - < 40°F
+  cool: '#22d3ee',   // cyan - 40-55°F
+  mild: '#22c55e',   // green - 55-70°F
+  warm: '#f59e0b',   // amber - 70-85°F
+  hot: '#ef4444',    // red - > 85°F
+}
+
+const TEMP_BAND_LABELS: { [key in TempBand]: string } = {
+  cold: '< 40°F',
+  cool: '40-55°F',
+  mild: '55-70°F',
+  warm: '70-85°F',
+  hot: '> 85°F',
+}
+
+function getTempBand(temp: number): TempBand {
+  if (temp < 40) return 'cold'
+  if (temp < 55) return 'cool'
+  if (temp < 70) return 'mild'
+  if (temp < 85) return 'warm'
+  return 'hot'
+}
+
 export default function AnalyzePage() {
   const [usageData, setUsageData] = useState<UsageDataPoint[]>([])
   const [loading, setLoading] = useState(false)
@@ -67,7 +93,7 @@ export default function AnalyzePage() {
   const [filename, setFilename] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [metadata, setMetadata] = useState<{ date_range?: { start: string; end: string } } | null>(null)
-  const [accountInfo, setAccountInfo] = useState<{ zip_code?: string; region?: string; username?: string } | null>(null)
+  const [accountInfo, setAccountInfo] = useState<Record<string, unknown> | null>(null)
   const [weatherData, setWeatherData] = useState<WeatherDataPoint[]>([])
   const [weatherLoading, setWeatherLoading] = useState(false)
 
@@ -99,12 +125,12 @@ export default function AnalyzePage() {
       setMetadata(data.metadata)
       setAccountInfo(data.account_info || null)
 
-      // Fetch weather data if we have zip code and date range
-      const zipCode = data.account_info?.zip_code
+      // Fetch weather data - use zip code from file or default to Westchester County, NY
+      const zipCode = data.account_info?.zip_code || data.account_info?.zip || data.account_info?.zipcode || '10601' // Default: White Plains, Westchester
       const startDate = data.metadata?.date_range?.start?.split('T')[0]
       const endDate = data.metadata?.date_range?.end?.split('T')[0]
 
-      if (zipCode && startDate && endDate) {
+      if (startDate && endDate) {
         setWeatherLoading(true)
         try {
           const weatherResp = await fetch(
@@ -175,6 +201,34 @@ export default function AnalyzePage() {
 
   const filteredData = getFilteredData()
 
+  // Aggregate to hourly data for Usage vs Temperature chart
+  const hourlyFilteredData = (() => {
+    const hourlyMap = new Map<string, { kwh: number; temps: number[]; count: number }>()
+
+    filteredData.forEach(d => {
+      // Key by hour (YYYY-MM-DDTHH)
+      const hourKey = d.timestamp.substring(0, 13)
+      if (!hourlyMap.has(hourKey)) {
+        hourlyMap.set(hourKey, { kwh: 0, temps: [], count: 0 })
+      }
+      const hourData = hourlyMap.get(hourKey)!
+      hourData.kwh += d.consumption_kwh
+      hourData.count += 1
+      if (d.temperature_f != null) {
+        hourData.temps.push(d.temperature_f)
+      }
+    })
+
+    return Array.from(hourlyMap.entries())
+      .map(([hourKey, data]) => ({
+        timestamp: hourKey + ':00:00',
+        consumption_kwh: data.kwh,
+        temperature_f: data.temps.length > 0 ? data.temps.reduce((a, b) => a + b, 0) / data.temps.length : null,
+        hour: parseInt(hourKey.substring(11, 13))
+      }))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  })()
+
   // Calculate hourly averages (usage and temperature)
   const getHourlyAverages = () => {
     const hourlyData: { [hour: number]: { totalKwh: number; totalTemp: number; countKwh: number; countTemp: number } } = {}
@@ -199,6 +253,62 @@ export default function AnalyzePage() {
   }
 
   const hourlyAverages = getHourlyAverages()
+
+  // Calculate average daily profile by season
+  const getSeasonalHourlyAverages = () => {
+    const seasonalData: { [key in Season]: { [hour: number]: { total: number; count: number } } } = {
+      summer: {},
+      winter: {},
+      shoulder: {}
+    }
+
+    chartData.forEach(d => {
+      const month = parseISO(d.timestamp).getMonth() + 1
+      const season = getSeason(month)
+      if (!seasonalData[season][d.hour]) {
+        seasonalData[season][d.hour] = { total: 0, count: 0 }
+      }
+      seasonalData[season][d.hour].total += d.consumption_kwh
+      seasonalData[season][d.hour].count += 1
+    })
+
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      summer: seasonalData.summer[hour]?.count ? seasonalData.summer[hour].total / seasonalData.summer[hour].count : 0,
+      winter: seasonalData.winter[hour]?.count ? seasonalData.winter[hour].total / seasonalData.winter[hour].count : 0,
+      shoulder: seasonalData.shoulder[hour]?.count ? seasonalData.shoulder[hour].total / seasonalData.shoulder[hour].count : 0,
+    }))
+  }
+
+  const seasonalHourlyAverages = getSeasonalHourlyAverages()
+
+  // Calculate average daily profile by temperature band
+  const getTempBandHourlyAverages = () => {
+    const bandData: { [key in TempBand]: { [hour: number]: { total: number; count: number } } } = {
+      cold: {}, cool: {}, mild: {}, warm: {}, hot: {}
+    }
+
+    chartData.forEach(d => {
+      if (d.temperature_f == null) return
+      const band = getTempBand(d.temperature_f)
+      if (!bandData[band][d.hour]) {
+        bandData[band][d.hour] = { total: 0, count: 0 }
+      }
+      bandData[band][d.hour].total += d.consumption_kwh
+      bandData[band][d.hour].count += 1
+    })
+
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      cold: bandData.cold[hour]?.count ? bandData.cold[hour].total / bandData.cold[hour].count : null,
+      cool: bandData.cool[hour]?.count ? bandData.cool[hour].total / bandData.cool[hour].count : null,
+      mild: bandData.mild[hour]?.count ? bandData.mild[hour].total / bandData.mild[hour].count : null,
+      warm: bandData.warm[hour]?.count ? bandData.warm[hour].total / bandData.warm[hour].count : null,
+      hot: bandData.hot[hour]?.count ? bandData.hot[hour].total / bandData.hot[hour].count : null,
+    }))
+  }
+
+  const tempBandHourlyAverages = getTempBandHourlyAverages()
 
   // Calculate seasonal median days
   const getSeasonalMedianDays = () => {
@@ -299,6 +409,9 @@ export default function AnalyzePage() {
   const avgUsage = filteredData.length > 0
     ? (filteredData.reduce((sum, d) => sum + d.consumption_kwh, 0) / filteredData.length).toFixed(3)
     : '0'
+  const peakDemandKw = filteredData.length > 0
+    ? (Math.max(...filteredData.map(d => d.consumption_kwh)) * 4).toFixed(2)
+    : '0'
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
@@ -394,6 +507,10 @@ export default function AnalyzePage() {
                   <div className="text-gray-600 dark:text-gray-400">Avg kWh/interval</div>
                 </div>
                 <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{peakDemandKw}</div>
+                  <div className="text-gray-600 dark:text-gray-400">Peak kW</div>
+                </div>
+                <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{filteredData.length}</div>
                   <div className="text-gray-600 dark:text-gray-400">Data Points</div>
                 </div>
@@ -409,12 +526,12 @@ export default function AnalyzePage() {
                   {weatherLoading && <span className="text-sm text-gray-500 ml-2">(loading weather...)</span>}
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={filteredData}>
+                  <LineChart data={hourlyFilteredData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis
                       dataKey="timestamp"
                       tickFormatter={(value) => {
-                        if (filteredData.length < 100) {
+                        if (hourlyFilteredData.length < 100) {
                           return format(parseISO(value), 'MM/dd HH:mm')
                         }
                         return format(parseISO(value), 'MM/dd')
@@ -425,7 +542,7 @@ export default function AnalyzePage() {
                     <Tooltip
                       labelFormatter={(value) => format(parseISO(value as string), 'MMM dd, yyyy HH:mm')}
                       formatter={(value: number, name: string) => [
-                        value.toFixed(name === 'Temperature (°F)' ? 1 : 3),
+                        value.toFixed(name === 'Temperature (°F)' ? 1 : 2),
                         name
                       ]}
                     />
@@ -470,6 +587,55 @@ export default function AnalyzePage() {
                     />
                     <Bar dataKey="avgConsumption" fill="#8b5cf6" name="Avg kWh" />
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Average Daily Profile by Season */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+                  Avg Daily Profile by Season
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={seasonalHourlyAverages}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="hour" tickFormatter={(h) => `${h}:00`} />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: number) => [value.toFixed(3), 'Avg kWh']}
+                      labelFormatter={(hour) => `${hour}:00`}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="summer" stroke={SEASON_COLORS.summer} strokeWidth={2} dot={false} name="Summer" />
+                    <Line type="monotone" dataKey="winter" stroke={SEASON_COLORS.winter} strokeWidth={2} dot={false} name="Winter" />
+                    <Line type="monotone" dataKey="shoulder" stroke={SEASON_COLORS.shoulder} strokeWidth={2} dot={false} name="Shoulder" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Average Daily Profile by Temperature Band */}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border border-gray-200 dark:border-gray-700 lg:col-span-2">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+                  Avg Daily Profile by Temperature Band
+                </h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={tempBandHourlyAverages}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="hour" tickFormatter={(h) => `${h}:00`} />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value, name) => [
+                        typeof value === 'number' ? value.toFixed(3) : 'N/A',
+                        TEMP_BAND_LABELS[name as TempBand] || name
+                      ]}
+                      labelFormatter={(hour) => `${hour}:00`}
+                    />
+                    <Legend formatter={(value) => TEMP_BAND_LABELS[value as TempBand] || value} />
+                    <Line type="monotone" dataKey="cold" stroke={TEMP_BAND_COLORS.cold} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="cool" stroke={TEMP_BAND_COLORS.cool} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="mild" stroke={TEMP_BAND_COLORS.mild} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="warm" stroke={TEMP_BAND_COLORS.warm} strokeWidth={2} dot={false} connectNulls />
+                    <Line type="monotone" dataKey="hot" stroke={TEMP_BAND_COLORS.hot} strokeWidth={2} dot={false} connectNulls />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
 
@@ -609,11 +775,11 @@ export default function AnalyzePage() {
                   Data range: {metadata.date_range.start && format(parseISO(metadata.date_range.start), 'MMM dd, yyyy')} - {metadata.date_range.end && format(parseISO(metadata.date_range.end), 'MMM dd, yyyy')}
                 </span>
               )}
-              {accountInfo?.zip_code && (
-                <span>ZIP: {accountInfo.zip_code}</span>
+              {(accountInfo?.zip_code || accountInfo?.zip || accountInfo?.zipcode) && (
+                <span>ZIP: {String(accountInfo?.zip_code || accountInfo?.zip || accountInfo?.zipcode)}</span>
               )}
               {accountInfo?.region && (
-                <span>Region: {accountInfo.region}</span>
+                <span>Region: {String(accountInfo.region)}</span>
               )}
             </div>
           </>
