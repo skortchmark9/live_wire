@@ -775,10 +775,10 @@ export default function AnalyzePage() {
                   Data range: {metadata.date_range.start && format(parseISO(metadata.date_range.start), 'MMM dd, yyyy')} - {metadata.date_range.end && format(parseISO(metadata.date_range.end), 'MMM dd, yyyy')}
                 </span>
               )}
-              {(accountInfo?.zip_code || accountInfo?.zip || accountInfo?.zipcode) && (
+              {!!(accountInfo?.zip_code || accountInfo?.zip || accountInfo?.zipcode) && (
                 <span>ZIP: {String(accountInfo?.zip_code || accountInfo?.zip || accountInfo?.zipcode)}</span>
               )}
-              {accountInfo?.region && (
+              {!!accountInfo?.region && (
                 <span>Region: {String(accountInfo.region)}</span>
               )}
             </div>
